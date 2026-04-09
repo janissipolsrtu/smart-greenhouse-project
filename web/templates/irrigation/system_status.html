@@ -1,0 +1,134 @@
+{% extends 'base.html' %}
+
+{% block title %}System Status - Irrigation System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="h2 mb-0">
+            <i class="fas fa-server me-2"></i>System Status
+        </h1>
+        <p class="text-muted">Monitor system health and performance</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-heartbeat me-2"></i>System Health
+                </h5>
+            </div>
+            <div class="card-body text-center">
+                <i class="fas fa-check-circle fa-4x text-success mb-3"></i>
+                <h4 class="text-success">Operational</h4>
+                <p class="text-muted">All services running normally</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-clock me-2"></i>Current Time
+                </h5>
+            </div>
+            <div class="card-body text-center">
+                <div class="h3 time-badge badge bg-primary mb-2" id="current_time"></div>
+                <p class="text-muted small mb-0">UTC Time</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-line me-2"></i>Monitoring
+                </h5>
+            </div>
+            <div class="card-body text-center">
+                <a href="http://localhost:5555" target="_blank" class="btn btn-primary">
+                    <i class="fas fa-external-link-alt me-2"></i>
+                    Open Flower Dashboard
+                </a>
+                <p class="text-muted small mt-2 mb-0">Task monitoring interface</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-cogs me-2"></i>System Components
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Backend Services</h6>
+                        <ul class="list-unstyled">
+                            <li class="mb-2">
+                                <i class="fas fa-check text-success me-2"></i>
+                                <strong>FastAPI</strong> - REST API Server
+                            </li>
+                            <li class="mb-2">
+                                <i class="fas fa-check text-success me-2"></i>
+                                <strong>Celery Worker</strong> - Task Execution
+                            </li>
+                            <li class="mb-2">
+                                <i class="fas fa-check text-success me-2"></i>
+                                <strong>Celery Beat</strong> - Task Scheduling
+                            </li>
+                            <li class="mb-2">
+                                <i class="fas fa-check text-success me-2"></i>
+                                <strong>Redis</strong> - Message Broker
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Data & Monitoring</h6>
+                        <ul class="list-unstyled">
+                            <li class="mb-2">
+                                <i class="fas fa-check text-success me-2"></i>
+                                <strong>PostgreSQL</strong> - Database
+                            </li>
+                            <li class="mb-2">
+                                <i class="fas fa-check text-success me-2"></i>
+                                <strong>Django Web</strong> - Web Interface  
+                            </li>
+                            <li class="mb-2">
+                                <i class="fas fa-check text-success me-2"></i>
+                                <strong>Flower</strong> - Task Monitoring
+                            </li>
+                            <li class="mb-2">
+                                <i class="fas fa-check text-success me-2"></i>
+                                <strong>MQTT</strong> - Device Communication
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function updateCurrentTime() {
+        const now = new Date();
+        const utcTime = now.toISOString().slice(0, 19).replace('T', ' ');
+        document.getElementById('current_time').textContent = utcTime;
+    }
+    
+    updateCurrentTime();
+    setInterval(updateCurrentTime, 1000);
+</script>
+{% endblock %}

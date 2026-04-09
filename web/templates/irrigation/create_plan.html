@@ -1,0 +1,195 @@
+{% extends 'base.html' %}
+
+{% block title %}Create Plan - Irrigation System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="h2 mb-0">
+            <i class="fas fa-plus me-2"></i>Create Irrigation Plan
+        </h1>
+        <p class="text-muted">Schedule a new irrigation session</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Plan Details</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="scheduled_date" class="form-label">
+                                    <i class="fas fa-calendar me-1"></i>Scheduled Date
+                                </label>
+                                <input type="date" class="form-control" id="scheduled_date" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="scheduled_time" class="form-label">
+                                    <i class="fas fa-clock me-1"></i>Scheduled Time (UTC)
+                                </label>
+                                <input type="time" class="form-control" id="scheduled_time_input" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="duration" class="form-label">
+                            <i class="fas fa-hourglass-half me-1"></i>Duration (seconds)
+                        </label>
+                        <input type="number" class="form-control" id="duration" name="duration" min="1" max="3600" placeholder="e.g., 60" required>
+                        <div class="form-text">Enter duration in seconds (1-3600)</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="device" class="form-label">
+                            <i class="fas fa-water me-1"></i>Irrigation Device
+                        </label>
+                        <select class="form-select" id="device" name="device" required>
+                            <option value="0x540f57fffe890af8">🏠 Main Irrigation Controller</option>
+                            <!-- Future devices can be added here -->
+                        </select>
+                        <div class="form-text">Select which Zigbee device to activate</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">
+                            <i class="fas fa-comment me-1"></i>Description (optional)
+                        </label>
+                        <input type="text" class="form-control" id="description" name="description" placeholder="e.g., Morning garden watering">
+                        <div class="form-text">Optional description for this irrigation plan</div>
+                    </div>
+                    
+                    <!-- Hidden field for the datetime -->
+                    <input type="hidden" id="scheduled_time" name="scheduled_time">
+                    
+                    <div class="mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <h6 class="card-title">
+                                    <i class="fas fa-info-circle me-1"></i>Summary
+                                </h6>
+                                <div id="plan_summary">
+                                    <p class="text-muted mb-0">Select date, time, and duration to see plan summary</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'irrigation:dashboard' %}" class="btn btn-outline-secondary me-md-2">
+                            <i class="fas fa-times me-1"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-1"></i>Create Plan
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-lightbulb me-2"></i>Tips
+                </h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success me-2"></i>
+                        <strong>Time Zone:</strong> All times are in UTC
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success me-2"></i>
+                        <strong>Duration:</strong> 60-300 seconds recommended
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success me-2"></i>
+                        <strong>Scheduling:</strong> Plans execute automatically
+                    </li>
+                    <li class="mb-0">
+                        <i class="fas fa-check text-success me-2"></i>
+                        <strong>Monitoring:</strong> Track progress in dashboard
+                    </li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-clock me-2"></i>Current Time
+                </h5>
+            </div>
+            <div class="card-body text-center">
+                <div class="h4 time-badge badge bg-primary" id="current_time"></div>
+                <p class="small text-muted mb-0">UTC Time</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function updateCurrentTime() {
+        const now = new Date();
+        const utcTime = now.toISOString().slice(11, 19);
+        document.getElementById('current_time').textContent = utcTime;
+    }
+    
+    function updateSummary() {
+        const date = document.getElementById('scheduled_date').value;
+        const time = document.getElementById('scheduled_time_input').value;
+        const duration = document.getElementById('duration').value;
+        const device = document.getElementById('device').value;
+        const description = document.getElementById('description').value;
+        
+        if (date && time && duration) {
+            const datetime = `${date}T${time}:00`;
+            document.getElementById('scheduled_time').value = datetime;
+            
+            const planDate = new Date(datetime);
+            const minutes = Math.round(duration / 60 * 10) / 10;
+            const deviceText = document.getElementById('device').options[document.getElementById('device').selectedIndex].text;
+            
+            const summary = `
+                <p class="mb-1"><strong>Scheduled:</strong> ${planDate.toUTCString()}</p>
+                <p class="mb-1"><strong>Duration:</strong> ${duration} seconds (${minutes} minutes)</p>
+                <p class="mb-1"><strong>Device:</strong> ${deviceText}</p>
+                ${description ? '<p class="mb-1"><strong>Description:</strong> ' + description + '</p>' : ''}
+                <p class="mb-0"><strong>Plan ID:</strong> Will be generated automatically</p>
+            `;
+            document.getElementById('plan_summary').innerHTML = summary;
+        }
+    }
+    
+    // Set default date to today
+    document.getElementById('scheduled_date').value = new Date().toISOString().split('T')[0];
+    
+    // Update current time every second
+    updateCurrentTime();
+    setInterval(updateCurrentTime, 1000);
+    
+    // Update summary when inputs change
+    document.getElementById('scheduled_date').addEventListener('change', updateSummary);
+    document.getElementById('scheduled_time_input').addEventListener('change', updateSummary);
+    document.getElementById('duration').addEventListener('input', updateSummary);
+    document.getElementById('device').addEventListener('change', updateSummary);
+    document.getElementById('description').addEventListener('input', updateSummary);
+    
+    // Initial summary update
+    updateSummary();
+</script>
+{% endblock %}
