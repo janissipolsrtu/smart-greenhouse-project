@@ -1,0 +1,32 @@
+# Commands to run ON THE RASPBERRY PI (192.168.8.151)
+
+# 1. SSH to Pi (run this from your local machine)
+ssh raspberry-user@192.168.8.151
+
+# 2. Once connected to Pi, install Python dependencies
+pip3 install paho-mqtt
+
+# 3. Test the timer service directly (without Docker first)
+python3 mqtt_timer_service.py
+
+# OR if you want Docker:
+
+# 4. Build Docker image
+docker build -f Dockerfile.timer -t irrigation-timer .
+
+# 5. Stop any existing container
+docker stop irrigation-timer-service 2>/dev/null || true
+docker rm irrigation-timer-service 2>/dev/null || true
+
+# 6. Run the container
+docker run -d \
+  --name irrigation-timer-service \
+  --network host \
+  --restart unless-stopped \
+  irrigation-timer
+
+# 7. Check if it's running
+docker ps | grep irrigation-timer
+
+# 8. View logs
+docker logs -f irrigation-timer-service
