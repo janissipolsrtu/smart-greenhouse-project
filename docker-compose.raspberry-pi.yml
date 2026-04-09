@@ -1,0 +1,54 @@
+# Docker Compose for Raspberry Pi Sensor Collection
+# This runs on your Raspberry Pi and sends data to your main server
+
+services:
+  # Sensor Data Collector (runs on Raspberry Pi)
+  sensor-collector:
+    build:
+      context: .
+      dockerfile: Dockerfile.raspberry_pi
+    container_name: raspberry-pi-sensor-collector
+    restart: unless-stopped
+    environment:
+      # MQTT Configuration (connect to WSL MQTT broker)
+      - MQTT_BROKER=192.168.8.100  # UPDATE THIS to your WSL server IP  
+      - MQTT_PORT=1883
+      - MQTT_TOPIC=sensor/+         # Subscribe to sensor topics
+      - MQTT_KEEPALIVE=60
+      
+      # Backend Server Configuration (your main server)
+      - BACKEND_SERVER=http://192.168.8.100:8080  # UPDATE THIS to your server IP
+      - API_TOKEN=  # Optional authentication token
+      
+      # Batching Configuration
+      - BATCH_SIZE=25          # Send data every 25 readings
+      - BATCH_INTERVAL=180     # Or every 3 minutes (180 seconds)
+      - MAX_RETRIES=5          # Retry failed sends 5 times
+      - RETRY_DELAY=60         # Wait 60 seconds between retries
+    
+    # Use host network to access local MQTT broker
+    network_mode: host
+    
+    # Mount logs directory for debugging
+    volumes:
+      - ./logs:/app/logs
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8080/api/health/', timeout=5)"]
+      interval: 300s  # Check every 5 minutes
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+# Optional: Add logging container for centralized logs
+  log-viewer:
+    image: amir20/dozzle:latest
+    container_name: raspberry-pi-logs
+    restart: unless-stopped
+    ports:
+      - "8888:8080"  # Access logs at http://raspberry-pi:8888
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    profiles:
+      - logs  # Only start with: docker-compose --profile logs up -d

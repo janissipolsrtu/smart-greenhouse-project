@@ -1,0 +1,17 @@
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install dependencies
+RUN pip install paho-mqtt
+
+# Copy the timer service
+COPY mqtt_timer_service.py /app/
+
+# Create non-root user for security
+RUN useradd -m -u 1000 irrigation && chown -R irrigation:irrigation /app
+USER irrigation
+
+# Run the timer service
+CMD ["python", "mqtt_timer_service.py"]

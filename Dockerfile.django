@@ -1,0 +1,35 @@
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Set work directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        postgresql-client \
+        netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements_django.txt .
+RUN pip install --no-cache-dir -r requirements_django.txt
+
+# Copy project
+COPY ./django_webapp/ .
+
+# Copy and set up entrypoint
+COPY django_webapp/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Create static files directory
+RUN mkdir -p /app/staticfiles
+
+# Expose port
+EXPOSE 8080
+
+# Run entrypoint script
+CMD ["/entrypoint.sh"]

@@ -1,0 +1,39 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create requirements file for local sensor collector
+RUN echo "paho-mqtt==1.6.1\nrequests==2.31.0" > requirements.txt
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy sensor collector script (modified for container environment)
+COPY sensor_collector_local.py .
+
+# Create entrypoint script
+RUN echo '#!/bin/bash\n\
+echo "📡 Starting Local Sensor Data Collector..."\n\
+echo "   MQTT Broker: ${MQTT_BROKER:-mosquitto}:${MQTT_PORT:-1883}"\n\
+echo "   Backend API: ${BACKEND_SERVER}"\n\
+echo "   Topic Pattern: ${MQTT_TOPIC:-sensor/+}"\n\
+echo ""\n\
+python sensor_collector_local.py' > /app/entrypoint.sh
+
+RUN chmod +x /app/entrypoint.sh
+
+# Default environment variables for container deployment
+ENV MQTT_BROKER=mosquitto
+ENV MQTT_PORT=1883
+ENV MQTT_TOPIC=sensor/+
+ENV BATCH_SIZE=25
+ENV BATCH_INTERVAL=180
+ENV MAX_RETRIES=3
+ENV RETRY_DELAY=30
+
+CMD ["/app/entrypoint.sh"]

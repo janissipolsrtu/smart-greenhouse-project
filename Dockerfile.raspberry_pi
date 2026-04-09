@@ -1,0 +1,41 @@
+# Raspberry Pi Sensor Collector Dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create requirements file for Raspberry Pi collector
+RUN echo "paho-mqtt==1.6.1\nrequests==2.31.0" > requirements.txt
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy sensor collector script
+COPY raspberry_pi_sensor_collector.py .
+
+# Create entrypoint script
+RUN echo '#!/bin/bash\n\
+echo "🚀 Starting Raspberry Pi Sensor Data Collector..."\n\
+echo "   MQTT Broker: ${MQTT_BROKER:-localhost}"\n\
+echo "   Backend Server: ${BACKEND_SERVER}"\n\
+echo "   Batch Size: ${BATCH_SIZE:-50}"\n\
+echo "   Batch Interval: ${BATCH_INTERVAL:-300}s"\n\
+echo ""\n\
+python raspberry_pi_sensor_collector.py' > /app/entrypoint.sh
+
+RUN chmod +x /app/entrypoint.sh
+
+# Default environment variables
+ENV MQTT_BROKER=localhost
+ENV MQTT_PORT=1883
+ENV MQTT_TOPIC=zigbee2mqtt/+
+ENV BATCH_SIZE=50
+ENV BATCH_INTERVAL=300
+ENV MAX_RETRIES=3
+ENV RETRY_DELAY=30
+
+CMD ["/app/entrypoint.sh"]

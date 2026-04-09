@@ -1,0 +1,60 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: irrigation-postgres
+    environment:
+      - POSTGRES_DB=irrigation_db
+      - POSTGRES_USER=irrigation_user
+      - POSTGRES_PASSWORD=irrigation_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - irrigation_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U irrigation_user -d irrigation_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI service (CRUD only)
+  irrigation-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: irrigation-api
+    ports:
+      - "0.0.0.0:8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://irrigation_user:irrigation_pass@postgres:5432/irrigation_db
+    networks:
+      - irrigation_network
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Scheduler service (Independent)
+  irrigation-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.scheduler
+    container_name: irrigation-scheduler
+    environment:
+      - DATABASE_URL=postgresql://irrigation_user:irrigation_pass@postgres:5432/irrigation_db
+      - MQTT_BROKER=192.168.8.151
+    networks:
+      - irrigation_network
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  irrigation_network:
+    driver: bridge

@@ -1,0 +1,20 @@
+# Simple Mosquitto MQTT Broker for WSL
+# Standalone MQTT broker - no other services
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: mosquitto-broker
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:1883:1883"    # MQTT port
+      - "0.0.0.0:9001:9001"    # WebSocket port (optional)
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-h", "localhost", "-t", "$SYS/#", "-C", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

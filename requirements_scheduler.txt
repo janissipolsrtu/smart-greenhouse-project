@@ -1,0 +1,5 @@
+# Additional dependencies for scheduler service with PostgreSQL
+APScheduler==3.10.4
+SQLAlchemy==2.0.23
+psycopg2-binary==2.9.9
+python-dateutil==2.8.2

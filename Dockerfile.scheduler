@@ -1,0 +1,24 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install both API and scheduler dependencies
+COPY requirements.txt requirements_scheduler.txt ./
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir -r requirements_scheduler.txt
+
+# Copy scheduler service and database files
+COPY irrigation_scheduler_service.py .
+COPY database.py .
+COPY models.py .
+COPY irrigation_db_service.py .
+
+# Create non-root user
+RUN useradd -m -u 1000 irrigation && chown -R irrigation:irrigation /app
+USER irrigation
+
+# Create volume mount point for shared JSON file
+VOLUME ["/app/data"]
+
+# Run the scheduler service
+CMD ["python", "irrigation_scheduler_service.py"]
