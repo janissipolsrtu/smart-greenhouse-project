@@ -14,7 +14,7 @@
 
 Projekta mērķis ir izstrādāt gudrās siltumnīcas sistēmu tomātu audzēšanai.
 
-Sistēma tiek izstrādāta, izmantojot **minimāli darbspējīgā produkta (MVP)** pieeju, nodrošinot būtiskāko funkcionalitāti, kas nepieciešama sistēmas pamatdarbībai.
+Sistēma tiek izstrādāta, izmantojot minimāli darbspējīgā produkta (MVP) pieeju, nodrošinot būtiskāko funkcionalitāti, kas nepieciešama sistēmas pamatdarbībai.
 
 Risinājums nodrošinās vismaz obligāti nepieciešamās funkcijas siltumnīcas uzraudzībai un kontrolei, veidojot pamatu turpmākai sistēmas attīstībai un paplašināšanai.
 
