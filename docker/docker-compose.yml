@@ -40,8 +40,8 @@ services:
     container_name: irrigation-mosquitto
     restart: unless-stopped
     ports:
-      - "0.0.0.0:1883:1883"    # MQTT port
-      - "0.0.0.0:9001:9001"    # WebSocket port
+      - "127.0.0.1:1883:1883"    # MQTT port
+      - "127.0.0.1:9001:9001"    # WebSocket port
     volumes:
       - ../mosquitto/config:/mosquitto/config
       - ../mosquitto/data:/mosquitto/data
@@ -61,7 +61,7 @@ services:
       dockerfile: docker/Dockerfile
     container_name: irrigation-api
     ports:
-      - "0.0.0.0:8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       - DATABASE_URL=postgresql://irrigation_user:irrigation_pass@postgres:5432/irrigation_db
       - CELERY_BROKER_URL=redis://redis:6379/0
@@ -84,7 +84,7 @@ services:
       dockerfile: docker/Dockerfile.django
     container_name: irrigation-django-webapp
     ports:
-      - "0.0.0.0:8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
       - POSTGRES_DB=irrigation_db
       - POSTGRES_USER=irrigation_user
@@ -159,7 +159,7 @@ services:
     container_name: irrigation-flower
     command: celery -A celery_config.celery_app flower --port=5555 --inspect_timeout=10000 --max_tasks=1000
     ports:
-      - "0.0.0.0:5555:5555"
+      - "127.0.0.1:5555:5555"
     environment:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0

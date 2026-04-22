@@ -84,7 +84,7 @@ app.add_middleware(
 )
 
 # MQTT Configuration
-MQTT_BROKER = "192.168.8.151"  # Your Raspberry Pi IP
+MQTT_BROKER = os.getenv("MQTT_BROKER", "mosquitto")  # Use Docker service name, fallback to mosquitto
 MQTT_PORT = 1883
 MQTT_KEEPALIVE = 60
 
