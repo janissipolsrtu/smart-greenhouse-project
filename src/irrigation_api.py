@@ -14,7 +14,7 @@ import threading
 import time
 import os
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import logging
 import uvicorn
 from typing import Optional, Dict, Any, List
@@ -24,6 +24,7 @@ from enum import Enum
 # Database imports
 from database import init_database, test_database_connection
 from irrigation_db_service import IrrigationPlanService
+from plant_db_service import PlantService
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -64,6 +65,51 @@ class ApiResponse(BaseModel):
     message: str
     data: Optional[Dict[Any, Any]] = None
     timestamp: str = datetime.utcnow().isoformat()
+
+# Plant Management Pydantic Models
+class PlantBase(BaseModel):
+    name: str  # Plant name or variety (FR-11)
+    variety: Optional[str] = None  # Specific variety if different from name
+    planting_date: date  # Planting date (FR-12)
+    watering_frequency: int = 1  # Times per day (FR-13)
+    watering_duration: int = 300  # Seconds per watering (FR-13)
+    water_amount_ml: Optional[int] = None  # Milliliters per watering (FR-13)
+    harvest_date_estimate: Optional[date] = None  # Expected harvest date (FR-14)
+    harvest_quantity_estimate: Optional[float] = None  # Expected quantity in kg (FR-14)
+    location_row: int  # Greenhouse row number (FR-15)
+    location_column: int  # Greenhouse column number (FR-15)
+    location_description: Optional[str] = None  # Additional location info (FR-15)
+    notes: Optional[str] = None  # General notes about the plant
+    active: bool = True  # Whether plant is still active
+
+class PlantCreate(PlantBase):
+    pass
+
+class PlantUpdate(BaseModel):
+    name: Optional[str] = None
+    variety: Optional[str] = None
+    planting_date: Optional[date] = None
+    watering_frequency: Optional[int] = None
+    watering_duration: Optional[int] = None
+    water_amount_ml: Optional[int] = None
+    harvest_date_estimate: Optional[date] = None
+    harvest_quantity_estimate: Optional[float] = None
+    location_row: Optional[int] = None
+    location_column: Optional[int] = None
+    location_description: Optional[str] = None
+    notes: Optional[str] = None
+    active: Optional[bool] = None
+
+class PlantResponse(PlantBase):
+    id: str
+    created_at: datetime
+    updated_at: datetime
+    location_coordinate: str  # Computed property like "R1C3"
+    days_since_planting: int  # Computed property
+    days_to_harvest: Optional[int] = None  # Computed property
+
+    class Config:
+        from_attributes = True
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -810,6 +856,279 @@ async def delete_irrigation_plan(plan_id: str):
     except Exception as e:
         logger.error(f"Error deleting irrigation plan: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to delete plan: {str(e)}")
+
+# =================== PLANT MANAGEMENT API ENDPOINTS ===================
+
+@app.post("/api/plants", response_model=ApiResponse, tags=["Plant Management"])
+async def create_plant(plant: PlantCreate):
+    """Register a new plant in the greenhouse (FR-9)"""
+    try:
+        # Validate input data
+        if plant.watering_frequency <= 0:
+            raise HTTPException(status_code=400, detail="Watering frequency must be positive")
+        
+        if plant.watering_duration <= 0:
+            raise HTTPException(status_code=400, detail="Watering duration must be positive")
+        
+        if plant.location_row <= 0 or plant.location_column <= 0:
+            raise HTTPException(status_code=400, detail="Location coordinates must be positive")
+        
+        if plant.planting_date > date.today():
+            raise HTTPException(status_code=400, detail="Planting date cannot be in the future")
+        
+        # Create plant using service
+        db_plant = PlantService.create_plant(
+            name=plant.name,
+            variety=plant.variety,
+            planting_date=plant.planting_date,
+            watering_frequency=plant.watering_frequency,
+            watering_duration=plant.watering_duration,
+            water_amount_ml=plant.water_amount_ml,
+            harvest_date_estimate=plant.harvest_date_estimate,
+            harvest_quantity_estimate=plant.harvest_quantity_estimate,
+            location_row=plant.location_row,
+            location_column=plant.location_column,
+            location_description=plant.location_description,
+            notes=plant.notes,
+            active=plant.active
+        )
+        
+        return ApiResponse(
+            success=True,
+            message="Plant registered successfully",
+            data={
+                "plant": db_plant.to_dict()
+            }
+        )
+        
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Error creating plant: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to register plant: {str(e)}")
+
+@app.get("/api/plants", response_model=ApiResponse, tags=["Plant Management"])
+async def get_all_plants(
+    active_only: bool = True,
+    limit: int = 100,
+    offset: int = 0
+):
+    """Get all registered plants with pagination (FR-16)"""
+    try:
+        plants = PlantService.get_all_plants(
+            active_only=active_only,
+            limit=limit,
+            offset=offset
+        )
+        
+        plants_data = [plant.to_dict() for plant in plants]
+        
+        return ApiResponse(
+            success=True,
+            message=f"Retrieved {len(plants_data)} plants",
+            data={
+                "plants": plants_data,
+                "count": len(plants_data),
+                "active_only": active_only,
+                "limit": limit,
+                "offset": offset
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting plants: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve plants: {str(e)}")
+
+@app.get("/api/plants/{plant_id}", response_model=ApiResponse, tags=["Plant Management"])
+async def get_plant(plant_id: str):
+    """Get specific plant information by ID (FR-16)"""
+    try:
+        plant = PlantService.get_plant(plant_id)
+        
+        if not plant:
+            raise HTTPException(status_code=404, detail="Plant not found")
+        
+        return ApiResponse(
+            success=True,
+            message="Plant retrieved successfully",
+            data={
+                "plant": plant.to_dict()
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting plant {plant_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve plant: {str(e)}")
+
+@app.put("/api/plants/{plant_id}", response_model=ApiResponse, tags=["Plant Management"])
+async def update_plant(plant_id: str, plant_update: PlantUpdate):
+    """Update plant information (FR-16)"""
+    try:
+        # Check if plant exists
+        existing_plant = PlantService.get_plant(plant_id)
+        if not existing_plant:
+            raise HTTPException(status_code=404, detail="Plant not found")
+        
+        # Prepare update data (only include non-None values)
+        update_data = {}
+        for field, value in plant_update.dict().items():
+            if value is not None:
+                update_data[field] = value
+        
+        if not update_data:
+            raise HTTPException(status_code=400, detail="No fields to update")
+        
+        # Validate dates
+        if 'planting_date' in update_data and update_data['planting_date'] > date.today():
+            raise HTTPException(status_code=400, detail="Planting date cannot be in the future")
+        
+        # Update plant
+        updated_plant = PlantService.update_plant(plant_id, **update_data)
+        
+        return ApiResponse(
+            success=True,
+            message="Plant updated successfully",
+            data={
+                "plant": updated_plant.to_dict()
+            }
+        )
+        
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Error updating plant {plant_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update plant: {str(e)}")
+
+@app.delete("/api/plants/{plant_id}", response_model=ApiResponse, tags=["Plant Management"])
+async def delete_plant(plant_id: str):
+    """Remove plant from greenhouse (soft delete)"""
+    try:
+        success = PlantService.delete_plant(plant_id)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Plant not found")
+        
+        return ApiResponse(
+            success=True,
+            message="Plant removed successfully",
+            data={
+                "plant_id": plant_id,
+                "action": "deactivated"
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error deleting plant {plant_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to remove plant: {str(e)}")
+
+@app.get("/api/plants/location/{row}/{column}", response_model=ApiResponse, tags=["Plant Management"])
+async def get_plant_at_location(row: int, column: int):
+    """Get plant at specific greenhouse location (FR-15)"""
+    try:
+        plants = PlantService.get_plants_by_location(row=row, column=column)
+        
+        if not plants:
+            return ApiResponse(
+                success=True,
+                message=f"No plant found at location R{row}C{column}",
+                data={
+                    "location": f"R{row}C{column}",
+                    "plant": None
+                }
+            )
+        
+        # Should only be one plant per location for active plants
+        plant = plants[0]
+        
+        return ApiResponse(
+            success=True,
+            message=f"Plant found at location R{row}C{column}",
+            data={
+                "location": f"R{row}C{column}",
+                "plant": plant.to_dict()
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting plant at location R{row}C{column}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve plant at location: {str(e)}")
+
+@app.get("/api/plants/search", response_model=ApiResponse, tags=["Plant Management"])
+async def search_plants(
+    name: str = None,
+    variety: str = None,
+    active_only: bool = True
+):
+    """Search plants by name or variety"""
+    try:
+        plants = PlantService.search_plants(
+            name=name,
+            variety=variety,
+            active_only=active_only
+        )
+        
+        plants_data = [plant.to_dict() for plant in plants]
+        
+        return ApiResponse(
+            success=True,
+            message=f"Found {len(plants_data)} matching plants",
+            data={
+                "plants": plants_data,
+                "search_criteria": {
+                    "name": name,
+                    "variety": variety,
+                    "active_only": active_only
+                }
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error searching plants: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to search plants: {str(e)}")
+
+@app.get("/api/greenhouse/layout", response_model=ApiResponse, tags=["Plant Management"])
+async def get_greenhouse_layout(max_rows: int = 10, max_columns: int = 10):
+    """Get complete greenhouse layout with plant positions (FR-15)"""
+    try:
+        layout = PlantService.get_greenhouse_layout(max_rows=max_rows, max_columns=max_columns)
+        
+        return ApiResponse(
+            success=True,
+            message="Greenhouse layout retrieved successfully",
+            data={
+                "layout": layout,
+                "dimensions": {
+                    "max_rows": max_rows,
+                    "max_columns": max_columns
+                }
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting greenhouse layout: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve greenhouse layout: {str(e)}")
+
+@app.get("/api/plants/harvest-ready", response_model=ApiResponse, tags=["Plant Management"])
+async def get_plants_ready_for_harvest():
+    """Get plants that are ready for harvest (FR-14)"""
+    try:
+        plants = PlantService.get_plants_ready_for_harvest()
+        plants_data = [plant.to_dict() for plant in plants]
+        
+        return ApiResponse(
+            success=True,
+            message=f"Found {len(plants_data)} plants ready for harvest",
+            data={
+                "plants": plants_data,
+                "count": len(plants_data)
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting harvest-ready plants: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve harvest-ready plants: {str(e)}")
+
+# =================== END PLANT MANAGEMENT API ENDPOINTS ===================
 
 def check_and_execute_scheduled_irrigations():
     """Background task to check and execute scheduled irrigations"""

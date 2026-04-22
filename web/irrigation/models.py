@@ -95,3 +95,79 @@ class IrrigationPlan(models.Model):
             delta = self.scheduled_time - timezone.now()
             return delta
         return None
+
+
+class Plant(models.Model):
+    """Model for plant registration and management in greenhouse"""
+    
+    id = models.CharField(max_length=100, primary_key=True)
+    name = models.CharField(max_length=100, help_text="Auga nosaukums vai šķirne")  # FR-11
+    variety = models.CharField(max_length=100, blank=True, null=True, help_text="Specifiskā šķirne")
+    planting_date = models.DateField(help_text="Stādīšanas datums")  # FR-12
+    watering_frequency = models.PositiveIntegerField(default=1, help_text="Laistīšanas biežums (reizes dienā)")  # FR-13
+    watering_duration = models.PositiveIntegerField(default=300, help_text="Laistīšanas ilgums sekundēs")  # FR-13
+    water_amount_ml = models.PositiveIntegerField(blank=True, null=True, help_text="Ūdens daudzums ml")  # FR-13
+    harvest_date_estimate = models.DateField(blank=True, null=True, help_text="Ražas prognozes datums")  # FR-14
+    harvest_quantity_estimate = models.FloatField(blank=True, null=True, help_text="Prognozētais ražas daudzums (kg)")  # FR-14
+    location_row = models.PositiveIntegerField(help_text="Rindas numurs siltumnīcā")  # FR-15
+    location_column = models.PositiveIntegerField(help_text="Kolonnas numurs siltumnīcā")  # FR-15
+    location_description = models.CharField(max_length=200, blank=True, null=True, help_text="Papildu atrašanās vietas apraksts")  # FR-15
+    notes = models.TextField(blank=True, null=True, help_text="Papildu piezīmes par augu")
+    active = models.BooleanField(default=True, help_text="Vai augs vēl ir aktīvs")
+    created_at = models.DateTimeField(default=timezone.now, help_text="Reģistrācijas datums")
+    updated_at = models.DateTimeField(auto_now=True, help_text="Pēdējās izmaiņas")
+    
+    class Meta:
+        db_table = 'plants'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['name', 'active']),
+            models.Index(fields=['location_row', 'location_column']),
+            models.Index(fields=['-planting_date']),
+        ]
+    
+    def __str__(self):
+        return f"{self.name} - {self.location_coordinate} ({self.planting_date})"
+    
+    @property
+    def location_coordinate(self):
+        """Get location as coordinate string (e.g., 'R1C3')"""
+        return f"R{self.location_row}C{self.location_column}"
+    
+    @property
+    def days_since_planting(self):
+        """Calculate days since planting"""
+        if self.planting_date:
+            return (timezone.now().date() - self.planting_date).days
+        return 0
+    
+    @property
+    def days_to_harvest(self):
+        """Calculate days until harvest"""
+        if self.harvest_date_estimate:
+            return (self.harvest_date_estimate - timezone.now().date()).days
+        return None
+    
+    @property
+    def is_ready_for_harvest(self):
+        """Check if plant is ready for harvest"""
+        if self.harvest_date_estimate:
+            return timezone.now().date() >= self.harvest_date_estimate
+        return False
+    
+    @property
+    def watering_schedule_daily_ml(self):
+        """Calculate total daily water amount"""
+        if self.water_amount_ml:
+            return self.water_amount_ml * self.watering_frequency
+        return None
+    
+    def save(self, *args, **kwargs):
+        """Override save to generate ID if not provided"""
+        if not self.id:
+            import time
+            import uuid
+            timestamp = int(time.time())
+            unique_id = uuid.uuid4().hex[:8]
+            self.id = f"plant_{timestamp}_{unique_id}"
+        super().save(*args, **kwargs)

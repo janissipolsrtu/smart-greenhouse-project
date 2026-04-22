@@ -3,10 +3,10 @@ from django.contrib import messages
 from django.utils import timezone
 from django.views.generic import ListView
 from django.http import JsonResponse
-from django.db.models import Avg, Max, Min, Count
+from django.db.models import Avg, Max, Min, Count, Q
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from .models import IrrigationPlan, SensorData
+from .models import IrrigationPlan, SensorData, Plant
 import uuid
 import time
 import json
@@ -347,3 +347,334 @@ def health_check_api(request):
             'error': str(e),
             'timestamp': timezone.now().isoformat()
         }, status=503)
+
+# =================== PLANT MANAGEMENT VIEWS ===================
+
+class PlantListView(ListView):
+    """List all plants with pagination"""
+    model = Plant
+    template_name = 'irrigation/plant_list.html'
+    context_object_name = 'plants'
+    paginate_by = 20
+    
+    def get_queryset(self):
+        queryset = Plant.objects.filter(active=True).order_by('-created_at')
+        
+        # Add search functionality
+        search_query = self.request.GET.get('search')
+        if search_query:
+            queryset = queryset.filter(
+                Q(name__icontains=search_query) | 
+                Q(variety__icontains=search_query) |
+                Q(notes__icontains=search_query)
+            )
+        
+        return queryset
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['search_query'] = self.request.GET.get('search', '')
+        context['total_plants'] = Plant.objects.filter(active=True).count()
+        return context
+
+
+def plant_dashboard_view(request):
+    """Plant management dashboard with overview (FR-16)"""
+    now = timezone.now()
+    today = now.date()
+    
+    # Get plant statistics
+    total_plants = Plant.objects.filter(active=True).count()
+    plants_ready_for_harvest = Plant.objects.filter(
+        active=True,
+        harvest_date_estimate__lte=today
+    ).count()
+    
+    recently_planted = Plant.objects.filter(
+        active=True,
+        planting_date__gte=today - timezone.timedelta(days=7)
+    ).count()
+    
+    # Get plants ready for harvest
+    harvest_ready_plants = Plant.objects.filter(
+        active=True,
+        harvest_date_estimate__lte=today
+    ).order_by('harvest_date_estimate')[:5]
+    
+    # Get recently planted plants
+    recent_plants = Plant.objects.filter(
+        active=True
+    ).order_by('-planting_date')[:5]
+    
+    # Get greenhouse layout summary (first 5x5 for overview)
+    layout_summary = get_greenhouse_layout_summary(max_rows=5, max_columns=5)
+    
+    context = {
+        'total_plants': total_plants,
+        'plants_ready_for_harvest': plants_ready_for_harvest,
+        'recently_planted': recently_planted,
+        'harvest_ready_plants': harvest_ready_plants,
+        'recent_plants': recent_plants,
+        'layout_summary': layout_summary,
+        'current_date': today,
+    }
+    
+    return render(request, 'irrigation/plant_dashboard.html', context)
+
+
+def plant_detail_view(request, plant_id):
+    """View details of a specific plant (FR-16)"""
+    plant = get_object_or_404(Plant, id=plant_id)
+    
+    context = {
+        'plant': plant,
+        'can_edit': plant.active,  # Only allow editing of active plants
+    }
+    
+    return render(request, 'irrigation/plant_detail.html', context)
+
+
+def create_plant_view(request):
+    """Create a new plant registration (FR-9)"""
+    if request.method == 'POST':
+        try:
+            # Extract form data
+            name = request.POST.get('name').strip()
+            variety = request.POST.get('variety', '').strip() or None
+            planting_date = request.POST.get('planting_date')
+            location_row = int(request.POST.get('location_row'))
+            location_column = int(request.POST.get('location_column'))
+            watering_frequency = int(request.POST.get('watering_frequency', 1))
+            watering_duration = int(request.POST.get('watering_duration', 300))
+            water_amount_ml = request.POST.get('water_amount_ml')
+            harvest_date_estimate = request.POST.get('harvest_date_estimate')  
+            harvest_quantity_estimate = request.POST.get('harvest_quantity_estimate')
+            location_description = request.POST.get('location_description', '').strip() or None
+            notes = request.POST.get('notes', '').strip() or None
+            
+            # Validate water amount
+            water_amount_ml = int(water_amount_ml) if water_amount_ml else None
+            
+            # Validate harvest data  
+            harvest_date_estimate = datetime.fromisoformat(harvest_date_estimate).date() if harvest_date_estimate else None
+            harvest_quantity_estimate = float(harvest_quantity_estimate) if harvest_quantity_estimate else None
+            
+            # Parse planting date
+            planting_date = datetime.fromisoformat(planting_date).date()
+            
+            # Check if location is already occupied
+            existing_plant = Plant.objects.filter(
+                location_row=location_row,
+                location_column=location_column,
+                active=True
+            ).first()
+            
+            if existing_plant:
+                messages.error(request, f'Atrašanās vieta R{location_row}C{location_column} jau ir aizņemta ar augu: {existing_plant.name}')
+                return render(request, 'irrigation/create_plant.html')
+            
+            # Create the plant
+            plant = Plant.objects.create(
+                name=name,
+                variety=variety,
+                planting_date=planting_date,
+                location_row=location_row,
+                location_column=location_column,
+                watering_frequency=watering_frequency,
+                watering_duration=watering_duration,
+                water_amount_ml=water_amount_ml,
+                harvest_date_estimate=harvest_date_estimate,
+                harvest_quantity_estimate=harvest_quantity_estimate,
+                location_description=location_description,
+                notes=notes
+            )
+            
+            messages.success(request, f'Augs "{plant.name}" veiksmīgi reģistrēts pozīcijā {plant.location_coordinate}!')
+            return redirect('irrigation:plant_detail', plant_id=plant.id)
+            
+        except ValueError as e:
+            messages.error(request, f'Nepareizi dati: {str(e)}')
+        except Exception as e:
+            messages.error(request, f'Kļūda reģistrējot augu: {str(e)}')
+    
+    return render(request, 'irrigation/create_plant.html')
+
+
+def edit_plant_view(request, plant_id):
+    """Edit plant information (FR-16)"""
+    plant = get_object_or_404(Plant, id=plant_id)
+    
+    if not plant.active:
+        messages.warning(request, 'Nav iespējams rediģēt neaktīvu augu.')
+        return redirect('irrigation:plant_detail', plant_id=plant.id)
+    
+    if request.method == 'POST':
+        try:
+            # Update plant data
+            plant.name = request.POST.get('name').strip()
+            plant.variety = request.POST.get('variety', '').strip() or None
+            plant.planting_date = datetime.fromisoformat(request.POST.get('planting_date')).date()
+            
+            new_location_row = int(request.POST.get('location_row'))
+            new_location_column = int(request.POST.get('location_column'))
+            
+            # Check location change conflicts
+            if (new_location_row != plant.location_row or new_location_column != plant.location_column):
+                existing_plant = Plant.objects.filter(
+                    location_row=new_location_row,
+                    location_column=new_location_column,
+                    active=True
+                ).exclude(id=plant.id).first()
+                
+                if existing_plant:
+                    messages.error(request, f'Atrašanās vieta R{new_location_row}C{new_location_column} jau ir aizņemta ar augu: {existing_plant.name}')
+                    return render(request, 'irrigation/edit_plant.html', {'plant': plant})
+            
+            plant.location_row = new_location_row
+            plant.location_column = new_location_column
+            plant.watering_frequency = int(request.POST.get('watering_frequency', 1))
+            plant.watering_duration = int(request.POST.get('watering_duration', 300))
+            
+            water_amount_ml = request.POST.get('water_amount_ml')
+            plant.water_amount_ml = int(water_amount_ml) if water_amount_ml else None
+            
+            harvest_date = request.POST.get('harvest_date_estimate')
+            plant.harvest_date_estimate = datetime.fromisoformat(harvest_date).date() if harvest_date else None
+            
+            harvest_quantity = request.POST.get('harvest_quantity_estimate')
+            plant.harvest_quantity_estimate = float(harvest_quantity) if harvest_quantity else None
+            
+            plant.location_description = request.POST.get('location_description', '').strip() or None
+            plant.notes = request.POST.get('notes', '').strip() or None
+            
+            plant.save()
+            
+            messages.success(request, f'Auga "{plant.name}" informācija veiksmīgi atjaunināta!')
+            return redirect('irrigation:plant_detail', plant_id=plant.id)
+            
+        except ValueError as e:
+            messages.error(request, f'Nepareizi dati: {str(e)}')
+        except Exception as e:
+            messages.error(request, f'Kļūda atjauninot augu: {str(e)}')
+    
+    context = {'plant': plant}
+    return render(request, 'irrigation/edit_plant.html', context)
+
+
+def deactivate_plant_view(request, plant_id):
+    """Deactivate plant (soft delete)"""
+    plant = get_object_or_404(Plant, id=plant_id)
+    
+    if request.method == 'POST':
+        plant.active = False
+        plant.save()
+        messages.success(request, f'Augs "{plant.name}" veiksmīgi deaktivizēts!')
+        return redirect('irrigation:plant_dashboard')
+    
+    return render(request, 'irrigation/confirm_deactivate_plant.html', {'plant': plant})
+
+
+def greenhouse_layout_view(request):
+    """Display greenhouse layout with plant positions (FR-15)"""
+    max_rows = int(request.GET.get('rows', 10))
+    max_columns = int(request.GET.get('columns', 10))
+    
+    layout = get_greenhouse_layout_summary(max_rows=max_rows, max_columns=max_columns)
+    
+    context = {
+        'layout': layout,
+        'max_rows': max_rows,
+        'max_columns': max_columns,
+        'row_range': range(1, max_rows + 1),
+        'column_range': range(1, max_columns + 1),
+    }
+    
+    return render(request, 'irrigation/greenhouse_layout.html', context)
+
+
+def plants_ready_for_harvest_view(request):
+    """View plants that are ready for harvest (FR-14)"""
+    today = timezone.now().date()
+    
+    ready_plants = Plant.objects.filter(
+        active=True,
+        harvest_date_estimate__lte=today
+    ).order_by('harvest_date_estimate')
+    
+    upcoming_harvest = Plant.objects.filter(
+        active=True,
+        harvest_date_estimate__gt=today,
+        harvest_date_estimate__lte=today + timezone.timedelta(days=7)
+    ).order_by('harvest_date_estimate')
+    
+    context = {
+        'ready_plants': ready_plants,
+        'upcoming_harvest': upcoming_harvest,
+        'current_date': today,
+    }
+    
+    return render(request, 'irrigation/harvest_ready.html', context)
+
+
+def get_greenhouse_layout_summary(max_rows=10, max_columns=10):
+    """Helper function to generate greenhouse layout data"""
+    plants = Plant.objects.filter(active=True) 
+    
+    layout = {}
+    for row in range(1, max_rows + 1):
+        layout[row] = {}
+        for col in range(1, max_columns + 1):
+            layout[row][col] = None
+    
+    for plant in plants:
+        if plant.location_row <= max_rows and plant.location_column <= max_columns:
+            layout[plant.location_row][plant.location_column] = {
+                'id': plant.id,
+                'name': plant.name,
+                'variety': plant.variety,
+                'planting_date': plant.planting_date,
+                'days_since_planting': plant.days_since_planting,
+                'harvest_ready': plant.is_ready_for_harvest
+            }
+    
+    return layout
+
+
+# API endpoints for plants
+def plants_api(request):
+    """API endpoint for plant data (for AJAX requests)"""
+    if request.method == 'GET':
+        active_only = request.GET.get('active_only', 'true').lower() == 'true'
+        search_query = request.GET.get('search', '')
+        
+        queryset = Plant.objects.all()
+        
+        if active_only:
+            queryset = queryset.filter(active=True)
+        
+        if search_query:
+            queryset = queryset.filter(
+                Q(name__icontains=search_query) | 
+                Q(variety__icontains=search_query)
+            )
+        
+        plants_data = []
+        for plant in queryset.order_by('-created_at')[:50]:  # Limit to 50 for performance
+            plants_data.append({
+                'id': plant.id,
+                'name': plant.name,
+                'variety': plant.variety,
+                'location': plant.location_coordinate,
+                'planting_date': plant.planting_date.isoformat(),
+                'days_since_planting': plant.days_since_planting,
+                'harvest_ready': plant.is_ready_for_harvest,
+                'active': plant.active
+            })
+        
+        return JsonResponse({
+            'status': 'success',
+            'plants': plants_data,
+            'count': len(plants_data)
+        })
+    
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
