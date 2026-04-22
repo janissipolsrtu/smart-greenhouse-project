@@ -34,8 +34,8 @@ wsl docker rm $(wsl docker ps -aq) 2>$null || true
 # Start core services using the full system compose
 Write-Host "🚀 Starting complete irrigation system..." -ForegroundColor Green
 
-if (Test-Path "docker-compose.full-system.yml") {
-    wsl docker-compose -f docker-compose.full-system.yml up -d postgres redis
+if (Test-Path "docker/docker-compose.yml") {
+    wsl docker compose -f docker/docker-compose.yml up -d postgres redis
     
     # Wait for databases
     Write-Host "⏳ Waiting for databases to initialize..." -ForegroundColor Magenta
@@ -43,15 +43,15 @@ if (Test-Path "docker-compose.full-system.yml") {
     
     # Run migrations
     Write-Host "🔄 Running Django migrations..." -ForegroundColor Cyan
-    wsl docker-compose -f docker-compose.full-system.yml run --rm django-webapp python manage.py makemigrations irrigation
-    wsl docker-compose -f docker-compose.full-system.yml run --rm django-webapp python manage.py migrate
+    wsl docker compose -f docker/docker-compose.yml run --rm django-webapp python manage.py makemigrations irrigation
+    wsl docker compose -f docker/docker-compose.yml run --rm django-webapp python manage.py migrate
     
     # Start all services
     Write-Host "🚀 Starting all services..." -ForegroundColor Green
-    wsl docker-compose -f docker-compose.full-system.yml up -d
+    wsl docker compose -f docker/docker-compose.yml up -d
     
 } else {
-    Write-Host "❌ docker-compose.full-system.yml not found" -ForegroundColor Red
+    Write-Host "❌ docker/docker-compose.yml not found" -ForegroundColor Red
     exit 1
 }
 
@@ -72,7 +72,7 @@ try {
 # Check service status
 Write-Host ""
 Write-Host "📊 Service Status:" -ForegroundColor Yellow
-wsl docker-compose -f docker-compose.full-system.yml ps
+wsl docker compose -f docker/docker-compose.yml ps
 
 # Test services
 Write-Host ""
@@ -129,10 +129,10 @@ Write-Host "   2. Run setup script on Raspberry Pi:" -ForegroundColor White
 Write-Host "      ./setup_raspberry_pi.sh" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "🔧 Management Commands:" -ForegroundColor Yellow
-Write-Host "   View all logs:       wsl docker-compose -f docker-compose.full-system.yml logs -f" -ForegroundColor White
-Write-Host "   Stop all services:   wsl docker-compose -f docker-compose.full-system.yml down" -ForegroundColor White
-Write-Host "   Restart services:    wsl docker-compose -f docker-compose.full-system.yml restart" -ForegroundColor White
-Write-Host "   Check status:        wsl docker-compose -f docker-compose.full-system.yml ps" -ForegroundColor White
+Write-Host "   View all logs:       wsl docker compose -f docker/docker-compose.yml logs -f" -ForegroundColor White
+Write-Host "   Stop all services:   wsl docker compose -f docker/docker-compose.yml down" -ForegroundColor White
+Write-Host "   Restart services:    wsl docker compose -f docker/docker-compose.yml restart" -ForegroundColor White
+Write-Host "   Check status:        wsl docker compose -f docker/docker-compose.yml ps" -ForegroundColor White
 Write-Host ""
 Write-Host "🧪 Test MQTT:" -ForegroundColor Green
 Write-Host "   Publish:  wsl docker run --rm eclipse-mosquitto mosquitto_pub -h $wslIP -t 'sensor/test' -m 'Hello World'" -ForegroundColor White

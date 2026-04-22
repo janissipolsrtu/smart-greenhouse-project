@@ -774,7 +774,7 @@ docker-compose down
 #### 1. Docker Compose Production
 ```bash
 # Use production configuration
-docker-compose -f docker-compose.full-system.yml up -d
+docker compose -f docker/docker-compose.yml up -d
 
 # Or for Raspberry Pi deployment
 docker-compose -f docker-compose.raspberry-pi.yml up -d

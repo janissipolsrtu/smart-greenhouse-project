@@ -25,3 +25,14 @@ Risinājums nodrošinās vismaz obligāti nepieciešamās funkcijas siltumnīcas
 - Nodrošināt sistēmas stabilu pamatdarbību  
 - Izveidot paplašināmu pamatu turpmākai attīstībai  
 
+---
+
+## Izvietošana
+
+Pilnīgiem Docker iestatījumiem, izvietošanas instrukcijām un problēmu novēršanas rokasgrāmatai skatīt: **[DEPLOYMENT.md](DEPLOYMENT.md)**
+
+Ātrs sākums:
+```bash
+cd docker
+docker compose up -d
+```
