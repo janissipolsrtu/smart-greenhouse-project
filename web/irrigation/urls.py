@@ -30,4 +30,5 @@ urlpatterns = [
     path('api/sensor-data/bulk/', views.bulk_sensor_data_api, name='bulk_sensor_data_api'),
     path('api/health/', views.health_check_api, name='health_check_api'),
     path('api/plants/', views.plants_api, name='plants_api'),
+    path('api/paths/', views.paths_api, name='paths_api'),
 ]

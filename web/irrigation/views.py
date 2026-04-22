@@ -6,7 +6,7 @@ from django.http import JsonResponse
 from django.db.models import Avg, Max, Min, Count, Q
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from .models import IrrigationPlan, SensorData, Plant
+from .models import IrrigationPlan, SensorData, Plant, PathCell
 import uuid
 import time
 import json
@@ -575,14 +575,58 @@ def deactivate_plant_view(request, plant_id):
 
 
 def greenhouse_layout_view(request):
-    """Display greenhouse layout with plant positions (FR-15)"""
+    """Display greenhouse layout with plant positions and paths (FR-15)"""
     max_rows = int(request.GET.get('rows', 10))
     max_columns = int(request.GET.get('columns', 10))
     
-    layout = get_greenhouse_layout_summary(max_rows=max_rows, max_columns=max_columns)
+    # Get all active plants and path cells
+    plants = Plant.objects.filter(active=True)
+    paths = PathCell.objects.all()
+    
+    # Create a simple grid structure for the template
+    grid_data = []
+    for row in range(1, max_rows + 1):
+        row_data = []
+        for col in range(1, max_columns + 1):
+            # Find plant at this position
+            plant_at_position = plants.filter(location_row=row, location_column=col).first()
+            # Find path at this position
+            path_at_position = paths.filter(row=row, column=col).first()
+            
+            if plant_at_position:
+                row_data.append({
+                    'cell_type': 'plant',
+                    'has_plant': True,
+                    'plant': plant_at_position,
+                    'has_path': False,
+                    'path': None,
+                    'row': row,
+                    'col': col
+                })
+            elif path_at_position:
+                row_data.append({
+                    'cell_type': 'path',
+                    'has_plant': False,
+                    'plant': None,
+                    'has_path': True,
+                    'path': path_at_position,
+                    'row': row,
+                    'col': col
+                })
+            else:
+                row_data.append({
+                    'cell_type': 'empty',
+                    'has_plant': False,
+                    'plant': None,
+                    'has_path': False,
+                    'path': None,
+                    'row': row,
+                    'col': col
+                })
+        grid_data.append(row_data)
     
     context = {
-        'layout': layout,
+        'grid_data': grid_data,
         'max_rows': max_rows,
         'max_columns': max_columns,
         'row_range': range(1, max_rows + 1),
@@ -641,6 +685,7 @@ def get_greenhouse_layout_summary(max_rows=10, max_columns=10):
 
 
 # API endpoints for plants
+@csrf_exempt
 def plants_api(request):
     """API endpoint for plant data (for AJAX requests)"""
     if request.method == 'GET':
@@ -676,5 +721,199 @@ def plants_api(request):
             'plants': plants_data,
             'count': len(plants_data)
         })
+    
+    elif request.method == 'POST':
+        try:
+            # Parse JSON data
+            data = json.loads(request.body)
+            
+            # Validate required fields
+            required_fields = ['name', 'location_row', 'location_column', 'planting_date', 'watering_frequency', 'watering_duration']
+            for field in required_fields:
+                if field not in data or not data[field]:
+                    return JsonResponse({'success': False, 'error': f'Nepieciešams lauks: {field}'}, status=400)
+            
+            # Check if location is already occupied
+            existing_plant = Plant.objects.filter(
+                location_row=int(data['location_row']),
+                location_column=int(data['location_column']),
+                active=True
+            ).first()
+            
+            if existing_plant:
+                return JsonResponse({
+                    'success': False, 
+                    'error': f'Pozīcija jau ir aizņemta ar augu "{existing_plant.name}"'
+                }, status=400)
+            
+            # Parse dates
+            try:
+                planting_date = datetime.strptime(data['planting_date'], '%Y-%m-%d').date()
+            except ValueError:
+                return JsonResponse({'success': False, 'error': 'Nepareizs stādīšanas datuma formāts'}, status=400)
+            
+            harvest_date = None
+            if data.get('harvest_date_estimate'):
+                try:
+                    harvest_date = datetime.strptime(data['harvest_date_estimate'], '%Y-%m-%d').date()
+                except ValueError:
+                    return JsonResponse({'success': False, 'error': 'Nepareizs ražas datuma formāts'}, status=400)
+            
+            # Create the plant
+            plant = Plant.objects.create(
+                name=data['name'],
+                variety=data.get('variety', ''),
+                planting_date=planting_date,
+                watering_frequency=int(data['watering_frequency']),
+                watering_duration=int(data['watering_duration']),
+                water_amount_ml=int(data.get('water_amount_ml', 500)),
+                harvest_date_estimate=harvest_date,
+                harvest_quantity_estimate=float(data.get('harvest_quantity_estimate', 0)) if data.get('harvest_quantity_estimate') else None,
+                location_row=int(data['location_row']),
+                location_column=int(data['location_column']),
+                location_description=data.get('location_description', ''),
+                notes=data.get('notes', ''),
+                active=True
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'plant': {
+                    'id': plant.id,
+                    'name': plant.name,
+                    'variety': plant.variety,
+                    'location': plant.location_coordinate,
+                    'planting_date': plant.planting_date.isoformat()
+                }
+            })
+            
+        except json.JSONDecodeError:
+            return JsonResponse({'success': False, 'error': 'Nepareizi JSON dati'}, status=400)
+        except ValueError as e:
+            return JsonResponse({'success': False, 'error': f'Datu kļūda: {str(e)}'}, status=400)
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': f'Servera kļūda: {str(e)}'}, status=500)
+    
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+
+# API endpoint for path management
+@csrf_exempt
+def paths_api(request):
+    """API endpoint for path data (for AJAX requests)"""
+    if request.method == 'GET':
+        # Get all path cells
+        paths = PathCell.objects.all()
+        
+        paths_data = []
+        for path in paths:
+            paths_data.append({
+                'row': path.row,
+                'column': path.column,
+                'location': path.location_coordinate,
+                'description': path.description,
+                'created_at': path.created_at.isoformat()
+            })
+        
+        return JsonResponse({
+            'status': 'success',
+            'paths': paths_data,
+            'count': len(paths_data)
+        })
+    
+    elif request.method == 'POST':
+        try:
+            # Parse JSON data
+            data = json.loads(request.body)
+            
+            # Validate required fields
+            required_fields = ['row', 'column']
+            for field in required_fields:
+                if field not in data or not data[field]:
+                    return JsonResponse({'success': False, 'error': f'Nepieciešams lauks: {field}'}, status=400)
+            
+            row = int(data['row'])
+            column = int(data['column'])
+            
+            # Check if location is already occupied by plant
+            existing_plant = Plant.objects.filter(
+                location_row=row,
+                location_column=column,
+                active=True
+            ).first()
+            
+            if existing_plant:
+                return JsonResponse({
+                    'success': False, 
+                    'error': f'Pozīcijā R{row}C{column} jau ir novietots augs "{existing_plant.name}"'
+                }, status=400)
+            
+            # Check if path already exists at this location
+            existing_path = PathCell.objects.filter(row=row, column=column).first()
+            
+            if existing_path:
+                return JsonResponse({
+                    'success': False, 
+                    'error': f'Ceļš jau eksistē pozīcijā R{row}C{column}'
+                }, status=400)
+            
+            # Create the path
+            path = PathCell.objects.create(
+                row=row,
+                column=column,
+                description=data.get('description', '')
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'path': {
+                    'row': path.row,
+                    'column': path.column,
+                    'location': path.location_coordinate,
+                    'description': path.description
+                }
+            })
+            
+        except json.JSONDecodeError:
+            return JsonResponse({'success': False, 'error': 'Nepareizi JSON dati'}, status=400)
+        except ValueError as e:
+            return JsonResponse({'success': False, 'error': f'Datu kļūda: {str(e)}'}, status=400)
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': f'Servera kļūda: {str(e)}'}, status=500)
+            
+    elif request.method == 'DELETE':
+        try:
+            # Parse JSON data
+            data = json.loads(request.body)
+            
+            # Validate required fields
+            if 'row' not in data or 'column' not in data:
+                return JsonResponse({'success': False, 'error': 'Nepieciešami lauki: row, column'}, status=400)
+            
+            row = int(data['row'])
+            column = int(data['column'])
+            
+            # Find and delete the path
+            path = PathCell.objects.filter(row=row, column=column).first()
+            
+            if not path:
+                return JsonResponse({
+                    'success': False, 
+                    'error': f'Ceļš nav atrasts pozīcijā R{row}C{column}'
+                }, status=404)
+            
+            path.delete()
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'Ceļš R{row}C{column} veiksmīgi noņemts'
+            })
+            
+        except json.JSONDecodeError:
+            return JsonResponse({'success': False, 'error': 'Nepareizi JSON dati'}, status=400)
+        except ValueError as e:
+            return JsonResponse({'success': False, 'error': f'Datu kļūda: {str(e)}'}, status=400)
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': f'Servera kļūda: {str(e)}'}, status=500)
     
     return JsonResponse({'error': 'Method not allowed'}, status=405)

@@ -171,3 +171,29 @@ class Plant(models.Model):
             unique_id = uuid.uuid4().hex[:8]
             self.id = f"plant_{timestamp}_{unique_id}"
         super().save(*args, **kwargs)
+
+
+class PathCell(models.Model):
+    """Model for storing greenhouse path cells (walkways between beds)"""
+    
+    row = models.PositiveIntegerField(help_text="Rindas numurs siltumnīcā")
+    column = models.PositiveIntegerField(help_text="Kolonnas numurs siltumnīcā") 
+    description = models.CharField(max_length=200, blank=True, null=True, help_text="Ceļa apraksts")
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'path_cells'
+        unique_together = ['row', 'column']  # Only one path per location
+        ordering = ['row', 'column']
+        indexes = [
+            models.Index(fields=['row', 'column']),
+        ]
+    
+    def __str__(self):
+        return f"Ceļš R{self.row}C{self.column}"
+    
+    @property
+    def location_coordinate(self):
+        """Get location as coordinate string (e.g., 'R1C3')"""
+        return f"R{self.row}C{self.column}"

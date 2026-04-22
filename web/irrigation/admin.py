@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import IrrigationPlan, SensorData, Plant
+from .models import IrrigationPlan, SensorData, Plant, PathCell
 
 
 @admin.register(SensorData)
@@ -109,3 +109,30 @@ class PlantAdmin(admin.ModelAdmin):
             return f"{days} dienas" if days > 0 else "Gatavs novākšanai"
         return "Nav norādīts"
     days_to_harvest.short_description = 'Dienas līdz ražai'
+
+
+@admin.register(PathCell)
+class PathCellAdmin(admin.ModelAdmin):
+    list_display = ['location_coordinate', 'row', 'column', 'description', 'created_at']
+    list_filter = ['row', 'column', 'created_at']
+    search_fields = ['description', 'row', 'column']
+    readonly_fields = ['created_at', 'updated_at', 'location_coordinate']
+    ordering = ['row', 'column']
+    
+    fieldsets = (
+        ('Ceļa pozīcija', {
+            'fields': ('row', 'column', 'location_coordinate')
+        }),
+        ('Apraksts', {
+            'fields': ('description',)
+        }),
+        ('Izveidošanas informācija', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+    
+    def location_coordinate(self, obj):
+        """Display location as coordinate"""
+        return obj.location_coordinate
+    location_coordinate.short_description = 'Koordinātes'

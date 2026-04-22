@@ -1,0 +1,712 @@
+{% extends 'base.html' %}
+{% load static %}
+{% csrf_token %}
+
+{% block title %}Siltumnīcas Izkārtojums - Irrigation System{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-9">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">
+                        <i class="fas fa-th-large me-2"></i>Siltumnīcas Izkārtojums
+                    </h4>
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="resize-grid-btn">
+                            <i class="fas fa-expand-arrows-alt"></i> Mainīt izmēru
+                        </button>
+                        <button type="button" class="btn btn-success btn-sm" id="add-plant-mode-btn">
+                            <i class="fas fa-plus"></i> Pievienot augs
+                        </button>
+                        <button type="button" class="btn btn-warning btn-sm" id="add-path-mode-btn">
+                            <i class="fas fa-road"></i> Pievienot ceļu
+                        </button>
+                        <button type="button" class="btn btn-danger btn-sm" id="remove-mode-btn" style="display: none;">
+                            <i class="fas fa-eraser"></i> Noņemt
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Grid Controls -->
+                    <div class="mb-3 p-2 bg-light rounded" id="grid-controls" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <label for="grid-rows" class="form-label">Rindas:</label>
+                                <input type="number" id="grid-rows" class="form-control form-control-sm" value="{{ max_rows }}" min="5" max="20">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="grid-columns" class="form-label">Kolonnas:</label>
+                                <input type="number" id="grid-columns" class="form-control form-control-sm" value="{{ max_columns }}" min="5" max="20">
+                            </div>
+                            <div class="col-md-3 d-flex align-items-end">
+                                <button type="button" class="btn btn-primary btn-sm" id="apply-grid-size">
+                                    Lietot
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Legend -->
+                    <div class="mb-3">
+                        <div class="d-flex flex-wrap gap-3 small">
+                            <span><i class="fas fa-square text-light border"></i> Brīva vieta</span>
+                            <span>🍅 Augs</span>
+                            <span style="filter: brightness(1.2) saturate(1.5);">🍅 Gatavs ražai</span>
+                            <span style="background: #8B4513; color: white; padding: 2px 6px; border-radius: 3px;"><i class="fas fa-road"></i> Ceļš</span>
+                            <span class="text-muted">Klikšķiniet uz brīvas vietas, lai pievienotu augu vai ceļu</span>
+                        </div>
+                    </div>
+
+                    <!-- Greenhouse Grid -->
+                    <div class="greenhouse-grid-container">
+                        <div class="greenhouse-grid" id="greenhouse-grid">
+                            <!-- Column headers -->
+                            <div class="grid-cell header-cell"></div>
+                            {% for col in column_range %}
+                                <div class="grid-cell header-cell">{{ col }}</div>
+                            {% endfor %}
+                            
+                            <!-- Grid rows -->
+                            {% for row_data in grid_data %}
+                                <!-- Row header -->
+                                <div class="grid-cell header-cell">{{ forloop.counter }}</div>
+                                
+                                <!-- Grid cells for this row -->
+                                {% for cell in row_data %}
+                                    {% if cell.cell_type == 'plant' %}
+                                        <div class="grid-cell plant-cell {% if cell.plant.is_ready_for_harvest %}harvest-ready{% endif %}" 
+                                             data-row="{{ cell.row }}" 
+                                             data-col="{{ cell.col }}"
+                                             data-cell-type="plant"
+                                             data-plant-id="{{ cell.plant.id }}"
+                                             title="{{ cell.plant.name }} {% if cell.plant.variety %}({{ cell.plant.variety }}){% endif %} - Stādīts: {{ cell.plant.planting_date }} ({{ cell.plant.days_since_planting }} dienas)">
+                                            <div class="plant-icon">🍅</div>
+                                            <div class="plant-name">{{ cell.plant.name|slice:":4" }}</div>
+                                        </div>
+                                    {% elif cell.cell_type == 'path' %}
+                                        <div class="grid-cell path-cell" 
+                                             data-row="{{ cell.row }}" 
+                                             data-col="{{ cell.col }}"
+                                             data-cell-type="path"
+                                             title="Ceļš R{{ cell.row }}C{{ cell.col }}{% if cell.path.description %} - {{ cell.path.description }}{% endif %}">
+                                            <i class="fas fa-road"></i>
+                                        </div>
+                                    {% else %}
+                                        <div class="grid-cell empty-cell" 
+                                             data-row="{{ cell.row }}" 
+                                             data-col="{{ cell.col }}"
+                                             data-cell-type="empty"
+                                             title="Rinda {{ cell.row }}, Kolonna {{ cell.col }} - Klikšķiniet, lai pievienotu augu vai ceļu">
+                                        </div>
+                                    {% endif %}
+                                {% endfor %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Side Panel -->
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Informācija</h5>
+                </div>
+                <div class="card-body" id="info-panel">
+                    <p class="text-muted">Izvēlieties šūnu, lai redzētu informāciju</p>
+                </div>
+            </div>
+            
+            <!-- Plant Form (hidden initially) -->
+            <div class="card mt-3" id="plant-form-card" style="display: none;">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-plus me-2"></i>Pievienot Augu</h5>
+                </div>
+                <div class="card-body">
+                    <form id="add-plant-form">
+                        <input type="hidden" id="plant-row" name="location_row">
+                        <input type="hidden" id="plant-col" name="location_column">
+                        
+                        <div class="mb-3">
+                            <label for="plant-name" class="form-label">Auga nosaukums *</label>
+                            <input type="text" class="form-control" id="plant-name" name="name" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="plant-variety" class="form-label">Šķirne</label>
+                            <input type="text" class="form-control" id="plant-variety" name="variety" placeholder="piem. Tomāts Cherry">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="plant-date" class="form-label">Stādīšanas datums *</label>
+                            <input type="date" class="form-control" id="plant-date" name="planting_date" required>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="watering-frequency" class="form-label">Laistīšanas biežums (stundas)</label>
+                                <input type="number" class="form-control" id="watering-frequency" name="watering_frequency" value="24" min="1">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="watering-duration" class="form-label">Laistīšanas ilgums (sek.)</label>
+                                <input type="number" class="form-control" id="watering-duration" name="watering_duration" value="30" min="1">
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3 mt-3">
+                            <label for="water-amount" class="form-label">Ūdens daudzums (ml)</label>
+                            <input type="number" class="form-control" id="water-amount" name="water_amount_ml" value="500" min="50" step="50">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="harvest-date" class="form-label">Paredzētais ražas datums</label>
+                            <input type="date" class="form-control" id="harvest-date" name="harvest_date_estimate">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="plant-notes" class="form-label">Piezīmes</label>
+                            <textarea class="form-control" id="plant-notes" name="notes" rows="3"></textarea>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-save"></i> Saglabāt Augu
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="cancel-add-plant">
+                                <i class="fas fa-times"></i> Atcelt
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cell Click Modal -->
+<div class="modal fade" id="plantModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Auga Informācija</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modal-plant-info">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Aizvērt</button>
+                <a href="#" class="btn btn-primary" id="edit-plant-link">Rediģēt</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.greenhouse-grid-container {
+    overflow-x: auto;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    background: #f8f9fa;
+    padding: 10px;
+}
+
+.greenhouse-grid {
+    display: grid;
+    grid-template-columns: 40px repeat({{ max_columns }}, 60px);
+    gap: 3px;
+    min-width: fit-content;
+}
+
+.grid-cell {
+    width: 60px;
+    height: 60px;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.header-cell {
+    background: #6c757d;
+    color: white;
+    cursor: default;
+    font-weight: bold;
+    font-size: 11px;
+}
+
+.empty-cell {
+    background: white;
+    border-style: dashed;
+    color: #adb5bd;
+}
+
+.empty-cell:hover {
+    background: #e3f2fd;
+    border-color: #2196f3;
+    transform: scale(1.05);
+}
+
+.plant-cell {
+    background: #d4edda;
+    border-color: #28a745;
+    color: #155724;
+}
+
+.plant-cell:hover {
+    background: #c3e6cb;
+    transform: scale(1.05);
+    box-shadow: 0 4px 8px rgba(40,167,69,0.3);
+}
+
+.plant-cell.harvest-ready {
+    background: #fff3cd;
+    border-color: #ffc107;
+    color: #856404;
+    animation: pulse 2s infinite;
+}
+
+.plant-cell .plant-icon {
+    font-size: 20px;
+    margin-bottom: 2px;
+}
+
+.plant-cell.harvest-ready .plant-icon {
+    filter: brightness(1.2) saturate(1.5);
+    transform: scale(1.1);
+}
+
+.path-cell {
+    background: #8B4513;
+    border-color: #654321;
+    color: #FFFFFF;
+}
+
+.path-cell:hover {
+    background: #A0522D;
+    transform: scale(1.05);
+    box-shadow: 0 4px 8px rgba(139,69,19,0.3);
+}
+
+.path-cell .fas {
+    font-size: 18px;
+    color: #FFFFFF;
+}
+
+.plant-name {
+    font-size: 9px;
+    line-height: 1;
+    text-align: center;
+    overflow: hidden;
+}
+
+.adding-plant .empty-cell {
+    background: #fff3e0;
+    border-color: #ff9800;
+}
+
+.adding-plant .empty-cell:hover {
+    background: #ffe0b2;
+    border-color: #f57c00;
+}
+
+.adding-path .empty-cell {
+    background: #f3e5ab;
+    border-color: #8b4513;
+}
+
+.adding-path .empty-cell:hover {
+    background: #deb887;
+    border-color: #654321;
+}
+
+.removing-mode .plant-cell:hover,
+.removing-mode .path-cell:hover {
+    background: #ffcdd2 !important;
+    border-color: #f44336 !important;
+    transform: scale(1.05);
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(255, 193, 7, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0); }
+}
+
+.selected-cell {
+    background: #cfe2ff !important;
+    border-color: #0d6efd !important;
+    transform: scale(1.1) !important;
+    z-index: 10;
+}
+
+@media (max-width: 768px) {
+    .greenhouse-grid {
+        grid-template-columns: 30px repeat({{ max_columns }}, 45px);
+    }
+    
+    .grid-cell {
+        width: 45px;
+        height: 45px;
+        font-size: 10px;
+    }
+    
+    .plant-cell .plant-icon {
+        font-size: 16px;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let mode = 'view'; // 'view', 'adding-plant', 'adding-path', 'removing'
+    let selectedCell = null;
+    
+    // Controls
+    const gridControlsBtn = document.getElementById('resize-grid-btn');
+    const gridControls = document.getElementById('grid-controls');
+    const addPlantModeBtn = document.getElementById('add-plant-mode-btn');
+    const addPathModeBtn = document.getElementById('add-path-mode-btn');
+    const removeModeBtn = document.getElementById('remove-mode-btn');
+    const plantFormCard = document.getElementById('plant-form-card');
+    const infoPanel = document.getElementById('info-panel');
+    const addPlantForm = document.getElementById('add-plant-form');
+    const cancelAddBtn = document.getElementById('cancel-add-plant');
+    
+    // Toggle grid controls
+    gridControlsBtn.addEventListener('click', function() {
+        gridControls.style.display = gridControls.style.display === 'none' ? 'block' : 'none';
+    });
+    
+    // Apply grid size
+    document.getElementById('apply-grid-size').addEventListener('click', function() {
+        const rows = document.getElementById('grid-rows').value;
+        const columns = document.getElementById('grid-columns').value;
+        window.location.href = `?rows=${rows}&columns=${columns}`;
+    });
+    
+    // Add plant mode toggle
+    addPlantModeBtn.addEventListener('click', function() {
+        if (mode === 'adding-plant') {
+            setMode('view');
+        } else {
+            setMode('adding-plant');
+        }
+    });
+    
+    // Add path mode toggle
+    addPathModeBtn.addEventListener('click', function() {
+        if (mode === 'adding-path') {
+            setMode('view');
+        } else {
+            setMode('adding-path');
+        }
+    });
+    
+    // Remove mode toggle
+    removeModeBtn.addEventListener('click', function() {
+        if (mode === 'removing') {
+            setMode('view');
+        } else {
+            setMode('removing');
+        }
+    });
+    
+    // Cancel add plant
+    cancelAddBtn.addEventListener('click', function() {
+        hidePlantForm();
+        setMode('view');
+    });
+    
+    // Set mode function
+    function setMode(newMode) {
+        mode = newMode;
+        
+        // Reset all button states
+        addPlantModeBtn.className = 'btn btn-success btn-sm';
+        addPlantModeBtn.innerHTML = '<i class="fas fa-plus"></i> Pievienot augs';
+        
+        addPathModeBtn.className = 'btn btn-warning btn-sm';
+        addPathModeBtn.innerHTML = '<i class="fas fa-road"></i> Pievienot ceļu';
+        
+        removeModeBtn.style.display = 'none';
+        
+        // Remove all mode classes
+        document.body.classList.remove('adding-plant', 'adding-path', 'removing-mode');
+        
+        // Apply new mode
+        switch(newMode) {
+            case 'adding-plant':
+                document.body.classList.add('adding-plant');
+                addPlantModeBtn.className = 'btn btn-warning btn-sm';
+                addPlantModeBtn.innerHTML = '<i class="fas fa-times"></i> Atcelt';
+                removeModeBtn.style.display = 'inline-block';
+                showInfo('Klikšķiniet uz brīvas šūnas, lai pievienotu augu');
+                break;
+                
+            case 'adding-path':
+                document.body.classList.add('adding-path');
+                addPathModeBtn.className = 'btn btn-warning btn-sm';
+                addPathModeBtn.innerHTML = '<i class="fas fa-times"></i> Atcelt';
+                removeModeBtn.style.display = 'inline-block';
+                showInfo('Klikšķiniet uz brīvas šūnas, lai pievienotu ceļu');
+                break;
+                
+            case 'removing':
+                document.body.classList.add('removing-mode');
+                removeModeBtn.style.display = 'inline-block';
+                removeModeBtn.innerHTML = '<i class="fas fa-times"></i> Atcelt';
+                showInfo('Klikšķiniet uz auga vai ceļa, lai to noņemtu');
+                break;
+                
+            case 'view':
+            default:
+                hidePlantForm();
+                clearSelection();
+                showInfo('Izveidojiet augu vai ceļu pozicījas');
+                break;
+        }
+    }
+    
+    // Grid cell click handler
+    document.querySelectorAll('.grid-cell').forEach(cell => {
+        cell.addEventListener('click', function() {
+            if (this.classList.contains('header-cell')) return;
+            
+            clearSelection();
+            this.classList.add('selected-cell');
+            selectedCell = this;
+            
+            const row = this.dataset.row;
+            const col = this.dataset.col;
+            const cellType = this.dataset.cellType;
+            const plantId = this.dataset.plantId;
+            
+            if (mode === 'adding-plant' && cellType === 'empty') {
+                showPlantForm(row, col);
+            } else if (mode === 'adding-path' && cellType === 'empty') {
+                createPath(row, col);
+            } else if (mode === 'removing' && (cellType === 'plant' || cellType === 'path')) {
+                if (cellType === 'plant') {
+                    removeItem('plant', row, col, plantId);
+                } else {
+                    removeItem('path', row, col);
+                }
+            } else if (cellType === 'plant') {
+                showPlantInfo(plantId, this.title);
+            } else if (cellType === 'path') {
+                showPathInfo(row, col, this.title);
+            } else {
+                showCellInfo(row, col);
+            }
+        });
+    });
+    
+    // Add plant form submission
+    addPlantForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const plantData = Object.fromEntries(formData);
+        
+        // Add CSRF token
+        plantData.csrfmiddlewaretoken = getCsrfToken();
+        
+        fetch('{% url "irrigation:plants_api" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify(plantData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Refresh the page to show the new plant
+                window.location.reload();
+            } else {
+                alert('Kļūda pievienojot augu: ' + (data.error || 'Nezināma kļūda'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Kļūda pievienojot augu');
+        });
+    });
+    
+    
+    function createPath(row, col) {
+        const pathData = {
+            row: parseInt(row),
+            column: parseInt(col),
+            description: `Ceļš R${row}C${col}`
+        };
+        
+        fetch('{% url "irrigation:paths_api" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify(pathData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Refresh the page to show the new path
+                window.location.reload();
+            } else {
+                alert('Kļūda pievienojot ceļu: ' + (data.error || 'Nezināma kļūda'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Kļūda pievienojot ceļu');
+        });
+    }
+    
+    function removeItem(type, row, col, itemId = null) {
+        const itemName = type === 'plant' ? 'augu' : 'ceļu';
+        
+        if (!confirm(`Vai tiešām vēlaties noņemt ${itemName} no pozīcijas R${row}C${col}?`)) {
+            return;
+        }
+        
+        if (type === 'plant') {
+            // For plants, redirect to deactivate view
+            window.location.href = `/irrigation/plants/${itemId}/deactivate/`;
+        } else {
+            // For paths, use DELETE API
+            fetch('{% url "irrigation:paths_api" %}', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrfToken()
+                },
+                body: JSON.stringify({
+                    row: parseInt(row),
+                    column: parseInt(col)
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    alert('Kļūda noņemot ceļu: ' + (data.error || 'Nezināma kļūda'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Kļūda noņemot ceļu');
+            });
+        }
+    }
+    
+    function showPathInfo(row, col, title) {
+        infoPanel.innerHTML = `
+            <h6>Ceļa informācija</h6>
+            <div class="small">${title}</div>
+            <div class="mt-2">
+                <button class="btn btn-danger btn-sm" onclick="removeItem('path', ${row}, ${col})">
+                    <i class="fas fa-trash"></i> Noņemt ceļu
+                </button>
+            </div>
+        `;
+    }
+
+    function showPlantForm(row, col) {
+        document.getElementById('plant-row').value = row;
+        document.getElementById('plant-col').value = col;
+        
+        // Set default date to today
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('plant-date').value = today;
+        
+        // Set default harvest date to 3 months from now
+        const harvestDate = new Date();
+        harvestDate.setMonth(harvestDate.getMonth() + 3);
+        document.getElementById('harvest-date').value = harvestDate.toISOString().split('T')[0];
+        
+        plantFormCard.style.display = 'block';
+        infoPanel.innerHTML = `
+            <h6>Pievienot augu</h6>
+            <p><strong>Pozīcija:</strong> Rinda ${row}, Kolonna ${col}</p>
+            <p class="text-muted">Aizpildiet formu zemāk, lai pievienotu augu šajā vietā.</p>
+        `;
+        
+        // Focus on name field
+        document.getElementById('plant-name').focus();
+    }
+    
+    function hidePlantForm() {
+        plantFormCard.style.display = 'none';
+        addPlantForm.reset();
+    }
+    
+    function clearAddingMode() {
+        setMode('view');
+    }
+    
+    function clearSelection() {
+        document.querySelectorAll('.selected-cell').forEach(cell => {
+            cell.classList.remove('selected-cell');
+        });
+        selectedCell = null;
+    }
+    
+    function showPlantInfo(plantId, title) {
+        infoPanel.innerHTML = `
+            <h6>Auga informācija</h6>
+            <div class="small">${title}</div>
+            <div class="mt-2">
+                <a href="/plants/${plantId}/" class="btn btn-primary btn-sm">
+                    <i class="fas fa-eye"></i> Skatīt detaļas
+                </a>
+                <a href="/plants/${plantId}/edit/" class="btn btn-outline-secondary btn-sm">
+                    <i class="fas fa-edit"></i> Rediģēt
+                </a>
+            </div>
+        `;
+    }
+    
+    function showCellInfo(row, col) {
+        infoPanel.innerHTML = `
+            <h6>Brīva vieta</h6>
+            <p><strong>Pozīcija:</strong> Rinda ${row}, Kolonna ${col}</p>
+            <p class="text-muted">Šī vieta ir brīva. Izveidojiet darbības režīmu, lai pievienotu augu vai ceļu.</p>
+        `;
+    }
+    
+    function showInfo(message) {
+        infoPanel.innerHTML = `<p class="text-info">${message}</p>`;
+    }
+    
+    function getCsrfToken() {
+        // Try to get CSRF token from input field first 
+        const tokenInput = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (tokenInput) {
+            return tokenInput.value;
+        }
+        
+        // Fallback: get from cookie
+        const cookieValue = document.cookie
+            .split('; ')
+            .find(row => row.startsWith('csrftoken='))
+            ?.split('=')[1];
+        
+        return cookieValue || '';
+    }
+});
+</script>
+{% endblock %}
