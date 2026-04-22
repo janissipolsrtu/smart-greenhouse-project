@@ -1,14 +1,14 @@
 {% extends 'base.html' %}
 
-{% block title %}Create Plan - Irrigation System{% endblock %}
+{% block title %}Izveidot plānu - Gudrā siltumnīca{% endblock %}
 
 {% block content %}
 <div class="row mb-4">
     <div class="col">
         <h1 class="h2 mb-0">
-            <i class="fas fa-plus me-2"></i>Create Irrigation Plan
+            <i class="fas fa-plus me-2"></i>Izveidot laistīšanas plānu
         </h1>
-        <p class="text-muted">Schedule a new irrigation session</p>
+        <p class="text-muted">Ieplānot jaunu laistīšanas sesiju</p>
     </div>
 </div>
 
@@ -16,7 +16,7 @@
     <div class="col-lg-8">
         <div class="card">
             <div class="card-header">
-                <h5 class="card-title mb-0">Plan Details</h5>
+                <h5 class="card-title mb-0">Plāna detaļas</h5>
             </div>
             <div class="card-body">
                 <form method="post">
@@ -25,7 +25,7 @@
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="scheduled_date" class="form-label">
-                                    <i class="fas fa-calendar me-1"></i>Scheduled Date
+                                    <i class="fas fa-calendar me-1"></i>Ieplānotais datums
                                 </label>
                                 <input type="date" class="form-control" id="scheduled_date" required>
                             </div>
@@ -33,7 +33,7 @@
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label for="scheduled_time" class="form-label">
-                                    <i class="fas fa-clock me-1"></i>Scheduled Time (UTC)
+                                    <i class="fas fa-clock me-1"></i>Ieplānotais laiks (UTC)
                                 </label>
                                 <input type="time" class="form-control" id="scheduled_time_input" required>
                             </div>
@@ -42,29 +42,29 @@
                     
                     <div class="mb-3">
                         <label for="duration" class="form-label">
-                            <i class="fas fa-hourglass-half me-1"></i>Duration (seconds)
+                            <i class="fas fa-hourglass-half me-1"></i>Ilgums (sekundes)
                         </label>
-                        <input type="number" class="form-control" id="duration" name="duration" min="1" max="3600" placeholder="e.g., 60" required>
-                        <div class="form-text">Enter duration in seconds (1-3600)</div>
+                        <input type="number" class="form-control" id="duration" name="duration" min="1" max="3600" placeholder="piem., 60" required>
+                        <div class="form-text">Ievadiet ilgumu sekundēs (1-3600)</div>
                     </div>
                     
                     <div class="mb-3">
                         <label for="device" class="form-label">
-                            <i class="fas fa-water me-1"></i>Irrigation Device
+                            <i class="fas fa-water me-1"></i>Laistīšanas ierīce
                         </label>
                         <select class="form-select" id="device" name="device" required>
-                            <option value="0x540f57fffe890af8">🏠 Main Irrigation Controller</option>
+                            <option value="0x540f57fffe890af8">🏠 Galvenā laistīšanas kontroliere</option>
                             <!-- Future devices can be added here -->
                         </select>
-                        <div class="form-text">Select which Zigbee device to activate</div>
+                        <div class="form-text">Izveidojiet, kuru Zigbee ierīci aktivizēt</div>
                     </div>
                     
                     <div class="mb-3">
                         <label for="description" class="form-label">
-                            <i class="fas fa-comment me-1"></i>Description (optional)
+                            <i class="fas fa-comment me-1"></i>Apraksts (neobligāti)
                         </label>
-                        <input type="text" class="form-control" id="description" name="description" placeholder="e.g., Morning garden watering">
-                        <div class="form-text">Optional description for this irrigation plan</div>
+                        <input type="text" class="form-control" id="description" name="description" placeholder="piem., Rīta dārza laistīšana">
+                        <div class="form-text">Neobligāts apraksts šim laistīšanas plānam</div>
                     </div>
                     
                     <!-- Hidden field for the datetime -->
@@ -74,10 +74,10 @@
                         <div class="card bg-light">
                             <div class="card-body">
                                 <h6 class="card-title">
-                                    <i class="fas fa-info-circle me-1"></i>Summary
+                                    <i class="fas fa-info-circle me-1"></i>Kopsavilkums
                                 </h6>
                                 <div id="plan_summary">
-                                    <p class="text-muted mb-0">Select date, time, and duration to see plan summary</p>
+                                    <p class="text-muted mb-0">Izveidojiet datumu, laiku un ilgumu, lai redzetu plāna kopsavilkumu</p>
                                 </div>
                             </div>
                         </div>
@@ -85,10 +85,10 @@
                     
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end">
                         <a href="{% url 'irrigation:dashboard' %}" class="btn btn-outline-secondary me-md-2">
-                            <i class="fas fa-times me-1"></i>Cancel
+                            <i class="fas fa-times me-1"></i>Atcelt
                         </a>
                         <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save me-1"></i>Create Plan
+                            <i class="fas fa-save me-1"></i>Izveidot plānu
                         </button>
                     </div>
                 </form>
@@ -100,26 +100,26 @@
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="fas fa-lightbulb me-2"></i>Tips
+                    <i class="fas fa-lightbulb me-2"></i>Padomi
                 </h5>
             </div>
             <div class="card-body">
                 <ul class="list-unstyled mb-0">
                     <li class="mb-2">
                         <i class="fas fa-check text-success me-2"></i>
-                        <strong>Time Zone:</strong> All times are in UTC
+                        <strong>Laika josla:</strong> Viss laiks ir UTC
                     </li>
                     <li class="mb-2">
                         <i class="fas fa-check text-success me-2"></i>
-                        <strong>Duration:</strong> 60-300 seconds recommended
+                        <strong>Ilgums:</strong> Ieteicamas 60-300 sekundes
                     </li>
                     <li class="mb-2">
                         <i class="fas fa-check text-success me-2"></i>
-                        <strong>Scheduling:</strong> Plans execute automatically
+                        <strong>Ieplānošana:</strong> Plāni izīlas automātiski
                     </li>
                     <li class="mb-0">
                         <i class="fas fa-check text-success me-2"></i>
-                        <strong>Monitoring:</strong> Track progress in dashboard
+                        <strong>Uzraudzība:</strong> Izsekojiet progresam pārskatos
                     </li>
                 </ul>
             </div>
@@ -128,12 +128,12 @@
         <div class="card mt-3">
             <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="fas fa-clock me-2"></i>Current Time
+                    <i class="fas fa-clock me-2"></i>Šobrīdējais laiks
                 </h5>
             </div>
             <div class="card-body text-center">
                 <div class="h4 time-badge badge bg-primary" id="current_time"></div>
-                <p class="small text-muted mb-0">UTC Time</p>
+                <p class="small text-muted mb-0">UTC laiks</p>
             </div>
         </div>
     </div>

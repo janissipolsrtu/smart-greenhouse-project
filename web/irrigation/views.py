@@ -93,11 +93,11 @@ def create_plan_view(request):
                 status='pending'
             )
             
-            messages.success(request, f'Irrigation plan {plan_id} created successfully!')
+            messages.success(request, f'Laistīšanas plāns {plan_id} veiksmīgi izveidots!')
             return redirect('irrigation:dashboard')
             
         except Exception as e:
-            messages.error(request, f'Error creating plan: {str(e)}')
+            messages.error(request, f'Kļūda izveidojot plānu: {str(e)}')
     
     return render(request, 'irrigation/create_plan.html')
 
@@ -114,7 +114,7 @@ def delete_plan_view(request, plan_id):
     
     if request.method == 'POST':
         plan.delete()
-        messages.success(request, f'Plan {plan_id} deleted successfully!')
+        messages.success(request, f'Plāns {plan_id} veiksmīgi dzēsts!')
         return redirect('irrigation:dashboard')
     
     return render(request, 'irrigation/confirm_delete.html', {'plan': plan})
@@ -219,7 +219,7 @@ def sensor_detail_view(request, device_name):
     latest_reading = SensorData.objects.filter(device_name=device_name).order_by('-timestamp').first()
     
     if not latest_reading:
-        messages.error(request, f'No data found for device: {device_name}')
+        messages.error(request, f'Dati nav atrasti ierīcei: {device_name}')
         return redirect('irrigation:temperature_dashboard')
     
     # Get readings for the last 7 days

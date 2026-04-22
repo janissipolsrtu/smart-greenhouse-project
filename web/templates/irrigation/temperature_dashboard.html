@@ -1,20 +1,20 @@
 {% extends 'base.html' %}
 
-{% block title %}Temperature Dashboard - Irrigation System{% endblock %}
+{% block title %}Temperatūras pārskats - Gudrā siltumnīca{% endblock %}
 
 {% block content %}
 <div class="row mb-4">
     <div class="col">
-        <h1><i class="fas fa-thermometer-half me-2"></i>Temperature Dashboard</h1>
-        <p class="text-muted">Real-time sensor monitoring and environmental data</p>
+        <h1><i class="fas fa-thermometer-half me-2"></i>Temperatūras pārskats</h1>
+        <p class="text-muted">Reāllaika sensoru uzraudzība un vides dati</p>
     </div>
     <div class="col-auto">
         <div class="btn-group" role="group">
             <button type="button" class="btn btn-outline-primary" onclick="refreshData()">
-                <i class="fas fa-sync-alt me-1"></i>Refresh
+                <i class="fas fa-sync-alt me-1"></i>Atjaunot
             </button>
             <button type="button" class="btn btn-outline-info" onclick="toggleAutoRefresh()">
-                <i class="fas fa-clock me-1"></i>Auto Refresh: <span id="auto-refresh-status">OFF</span>
+                <i class="fas fa-clock me-1"></i>Automātiskā atjaunināšana: <span id="auto-refresh-status">IZSLĒGTA</span>
             </button>
         </div>
     </div>
@@ -27,7 +27,7 @@
             <div class="card-body text-center">
                 <i class="fas fa-thermometer-three-quarters fa-2x mb-2"></i>
                 <h4 class="card-title">{{ stats.avg_temperature|floatformat:1|default:"N/A" }}°C</h4>
-                <p class="card-text">Average Temperature (24h)</p>
+                <p class="card-text">Vidējā temperatūra (24h)</p>
             </div>
         </div>
     </div>
@@ -36,7 +36,7 @@
             <div class="card-body text-center">
                 <i class="fas fa-arrow-up fa-2x mb-2"></i>
                 <h4 class="card-title">{{ stats.max_temperature|floatformat:1|default:"N/A" }}°C</h4>
-                <p class="card-text">Max Temperature (24h)</p>
+                <p class="card-text">Maks. temperatūra (24h)</p>
             </div>
         </div>
     </div>
@@ -45,7 +45,7 @@
             <div class="card-body text-center">
                 <i class="fas fa-tint fa-2x mb-2"></i>
                 <h4 class="card-title">{{ stats.avg_humidity|floatformat:0|default:"N/A" }}%</h4>
-                <p class="card-text">Average Humidity (24h)</p>
+                <p class="card-text">Vidējā mitrums (24h)</p>
             </div>
         </div>
     </div>
@@ -54,7 +54,7 @@
             <div class="card-body text-center">
                 <i class="fas fa-wifi fa-2x mb-2"></i>
                 <h4 class="card-title">{{ device_count }}</h4>
-                <p class="card-text">Active Sensors</p>
+                <p class="card-text">Aktīvie sensori</p>
             </div>
         </div>
     </div>
@@ -66,7 +66,7 @@
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="fas fa-broadcast-tower me-2"></i>Current Sensor Readings
+                    <i class="fas fa-broadcast-tower me-2"></i>Šobrīdējie sensoru rādījumi
                 </h5>
             </div>
             <div class="card-body">
@@ -87,14 +87,14 @@
                                                         <div class="text-center p-2 bg-light rounded">
                                                             <i class="fas fa-thermometer-half text-danger"></i>
                                                             <div class="fw-bold">{{ reading.temperature|floatformat:1|default:"--" }}°C</div>
-                                                            <small class="text-muted">Temperature</small>
+                                                            <small class="text-muted">Temperatūra</small>
                                                         </div>
                                                     </div>
                                                     <div class="col-6">
                                                         <div class="text-center p-2 bg-light rounded">
                                                             <i class="fas fa-tint text-info"></i>
                                                             <div class="fw-bold">{{ reading.humidity|default:"--" }}%</div>
-                                                            <small class="text-muted">Humidity</small>
+                                                            <small class="text-muted">Mitrums</small>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -108,13 +108,13 @@
                                         <div class="mt-2">
                                             <small class="text-muted">
                                                 <i class="fas fa-clock me-1"></i>
-                                                Last updated: {{ reading.formatted_timestamp }}
+                                                Pēdējo reizi atjaunināts: {{ reading.formatted_timestamp }}
                                             </small>
                                         </div>
                                         <div class="mt-2">
                                             <a href="{% url 'irrigation:sensor_detail' reading.device_name %}" 
                                                class="btn btn-sm btn-outline-primary">
-                                                <i class="fas fa-chart-line me-1"></i>View Details
+                                                <i class="fas fa-chart-line me-1"></i>Skatīt detaļas
                                             </a>
                                         </div>
                                     </div>
@@ -125,8 +125,8 @@
                 {% else %}
                     <div class="text-center py-5">
                         <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
-                        <h5>No sensor data available</h5>
-                        <p class="text-muted">Make sure the sensor data collection service is running and sensors are transmitting data.</p>
+                        <h5>Nav pieejami sensoru dati</h5>
+                        <p class="text-muted">Pārliecinieties, ka sensoru datu vākšanas dienests darbojas un sensori pārraida datus.</p>
                     </div>
                 {% endif %}
             </div>
@@ -140,7 +140,7 @@
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="fas fa-chart-line me-2"></i>24-Hour Temperature Trend
+                    <i class="fas fa-chart-line me-2"></i>24 stundu temperatūras tendence
                 </h5>
             </div>
             <div class="card-body">
@@ -157,25 +157,25 @@
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="fas fa-info-circle me-2"></i>24-Hour Summary
+                    <i class="fas fa-info-circle me-2"></i>24 stundu kopsavilkums
                 </h5>
             </div>
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6">
-                        <h6>Temperature Statistics</h6>
+                        <h6>Temperatūras statistika</h6>
                         <ul class="list-unstyled">
-                            <li><strong>Average:</strong> {{ stats.avg_temperature|floatformat:2 }}°C</li>
-                            <li><strong>Maximum:</strong> {{ stats.max_temperature|floatformat:2 }}°C</li>
-                            <li><strong>Minimum:</strong> {{ stats.min_temperature|floatformat:2 }}°C</li>
+                            <li><strong>Vidējais:</strong> {{ stats.avg_temperature|floatformat:2 }}°C</li>
+                            <li><strong>Maksimālais:</strong> {{ stats.max_temperature|floatformat:2 }}°C</li>
+                            <li><strong>Minimālais:</strong> {{ stats.min_temperature|floatformat:2 }}°C</li>
                         </ul>
                     </div>
                     <div class="col-md-6">
-                        <h6>System Statistics</h6>
+                        <h6>Sistēmas statistika</h6>
                         <ul class="list-unstyled">
-                            <li><strong>Total Readings:</strong> {{ stats.total_readings }}</li>
-                            <li><strong>Average Humidity:</strong> {{ stats.avg_humidity|floatformat:1 }}%</li>
-                            <li><strong>Active Devices:</strong> {{ device_count }}</li>
+                            <li><strong>Kopējie nolasījumi:</strong> {{ stats.total_readings }}</li>
+                            <li><strong>Vidējais mitrums:</strong> {{ stats.avg_humidity|floatformat:1 }}%</li>
+                            <li><strong>Aktīvās ierīces:</strong> {{ device_count }}</li>
                         </ul>
                     </div>
                 </div>
@@ -208,14 +208,14 @@
             data: {
                 labels: labels,
                 datasets: [{
-                    label: 'Temperature (°C)',
+                    label: 'Temperatūra (°C)',
                     data: temperatureData,
                     borderColor: 'rgb(255, 99, 132)',
                     backgroundColor: 'rgba(255, 99, 132, 0.2)',
                     yAxisID: 'y',
                     tension: 0.4
                 }, {
-                    label: 'Humidity (%)',
+                    label: 'Mitrums (%)',
                     data: humidityData,
                     borderColor: 'rgb(54, 162, 235)',
                     backgroundColor: 'rgba(54, 162, 235, 0.2)',
@@ -235,7 +235,7 @@
                         display: true,
                         title: {
                             display: true,
-                            text: 'Time'
+                            text: 'Laiks'
                         }
                     },
                     y: {
@@ -244,7 +244,7 @@
                         position: 'left',
                         title: {
                             display: true,
-                            text: 'Temperature (°C)'
+                            text: 'Temperatūra (°C)'
                         },
                     },
                     y1: {
@@ -253,7 +253,7 @@
                         position: 'right',
                         title: {
                             display: true,
-                            text: 'Humidity (%)'
+                            text: 'Mitrums (%)'
                         },
                         grid: {
                             drawOnChartArea: false,
@@ -263,7 +263,7 @@
                 plugins: {
                     title: {
                         display: true,
-                        text: 'Temperature and Humidity Trends'
+                        text: 'Temperatūras un mitruma tendences'
                     }
                 }
             }

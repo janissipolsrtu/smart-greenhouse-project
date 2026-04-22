@@ -1,18 +1,18 @@
 {% extends 'base.html' %}
 
-{% block title %}{{ plan.id }} - Plan Details{% endblock %}
+{% block title %}{{ plan.id }} - Plāna detaļas{% endblock %}
 
 {% block content %}
 <div class="row mb-4">
     <div class="col">
         <h1 class="h2 mb-0">
-            <i class="fas fa-info-circle me-2"></i>Plan Details
+            <i class="fas fa-info-circle me-2"></i>Plāna detaļas
         </h1>
         <p class="text-muted">{{ plan.id }}</p>
     </div>
     <div class="col-auto">
         <a href="{% url 'irrigation:plan_list' %}" class="btn btn-outline-secondary">
-            <i class="fas fa-arrow-left me-1"></i>Back to Plans
+            <i class="fas fa-arrow-left me-1"></i>Atpakaļ uz plāniem
         </a>
     </div>
 </div>
@@ -21,30 +21,30 @@
     <div class="col-lg-8">
         <div class="card">
             <div class="card-header">
-                <h5 class="card-title mb-0">Plan Information</h5>
+                <h5 class="card-title mb-0">Plāna informācija</h5>
             </div>
             <div class="card-body">
                 <dl class="row">
-                    <dt class="col-sm-3">Plan ID:</dt>
+                    <dt class="col-sm-3">Plāna ID:</dt>
                     <dd class="col-sm-9"><code>{{ plan.id }}</code></dd>
                     
-                    <dt class="col-sm-3">Scheduled Time:</dt>
+                    <dt class="col-sm-3">Ieplānotais laiks:</dt>
                     <dd class="col-sm-9">
                         <span class="time-badge badge bg-primary">
                             {{ plan.scheduled_time|date:"M d, Y H:i:s" }} UTC
                         </span>
                     </dd>
                     
-                    <dt class="col-sm-3">Duration:</dt>
-                    <dd class="col-sm-9">{{ plan.duration }} seconds ({{ plan.duration_minutes|floatformat:1 }} minutes)</dd>
+                    <dt class="col-sm-3">Ilgums:</dt>
+                    <dd class="col-sm-9">{{ plan.duration }} sekundes ({{ plan.duration_minutes|floatformat:1 }} minūtes)</dd>
                     
-                    <dt class="col-sm-3">Device:</dt>
+                    <dt class="col-sm-3">Ierīce:</dt>
                     <dd class="col-sm-9">
                         <span class="badge bg-info">{{ plan.get_device_display }}</span>
                     </dd>
                     
                     {% if plan.description %}
-                    <dt class="col-sm-3">Description:</dt>
+                    <dt class="col-sm-3">Apraksts:</dt>
                     <dd class="col-sm-9">{{ plan.description }}</dd>
                     {% endif %}
                     

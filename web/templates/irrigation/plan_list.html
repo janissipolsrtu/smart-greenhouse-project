@@ -1,18 +1,18 @@
 {% extends 'base.html' %}
 
-{% block title %}All Plans - Irrigation System{% endblock %}
+{% block title %}Visi plāni - Gudrā siltumnīca{% endblock %}
 
 {% block content %}
 <div class="row mb-4">
     <div class="col">
         <h1 class="h2 mb-0">
-            <i class="fas fa-list me-2"></i>All Irrigation Plans
+            <i class="fas fa-list me-2"></i>Visi laistīšanas plāni
         </h1>
-        <p class="text-muted">Manage all your irrigation plans</p>
+        <p class="text-muted">Pārvaldīt visus jūsu laistīšanas plānus</p>
     </div>
     <div class="col-auto">
         <a href="{% url 'irrigation:create_plan' %}" class="btn btn-primary">
-            <i class="fas fa-plus me-2"></i>Create New Plan
+            <i class="fas fa-plus me-2"></i>Izveidot jaunu plānu
         </a>
     </div>
 </div>
@@ -24,12 +24,12 @@
             <table class="table table-hover">
                 <thead class="table-light">
                     <tr>
-                        <th>Plan ID</th>
-                        <th>Scheduled Time</th>
-                        <th>Duration</th>
-                        <th>Device</th>
-                        <th>Status</th>
-                        <th>Actions</th>
+                        <th>Plāna ID</th>
+                        <th>Ieplānotais laiks</th>
+                        <th>Ilgums</th>
+                        <th>Ierīce</th>
+                        <th>Statuss</th>
+                        <th>Darbības</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -47,7 +47,7 @@
                             </span>
                             {% if plan.is_overdue %}
                                 <br><small class="text-danger">
-                                    <i class="fas fa-exclamation-triangle me-1"></i>Overdue
+                                    <i class="fas fa-exclamation-triangle me-1"></i>Nokavēts
                                 </small>
                             {% endif %}
                         </td>
@@ -57,22 +57,22 @@
                         </td>
                         <td>
                             {% if plan.status == 'pending' %}
-                                <span class="badge bg-warning status-badge">Pending</span>
+                                <span class="badge bg-warning status-badge">Gaidošs</span>
                             {% elif plan.status == 'executing' %}
-                                <span class="badge bg-info status-badge">Executing</span>
+                                <span class="badge bg-info status-badge">Izpilda</span>
                             {% elif plan.status == 'completed' %}
-                                <span class="badge bg-success status-badge">Completed</span>
+                                <span class="badge bg-success status-badge">Pabeigts</span>
                             {% elif plan.status == 'failed' %}
-                                <span class="badge bg-danger status-badge">Failed</span>
+                                <span class="badge bg-danger status-badge">Neizdevās</span>
                             {% endif %}
                         </td>
                         <td>
                             <div class="btn-group btn-group-sm" role="group">
-                                <a href="{% url 'irrigation:plan_detail' plan.id %}" class="btn btn-outline-primary" title="View Details">
+                                <a href="{% url 'irrigation:plan_detail' plan.id %}" class="btn btn-outline-primary" title="Skatīt detaļas">
                                     <i class="fas fa-eye"></i>
                                 </a>
                                 {% if plan.status == 'pending' %}
-                                <a href="{% url 'irrigation:delete_plan' plan.id %}" class="btn btn-outline-danger" title="Delete Plan">
+                                <a href="{% url 'irrigation:delete_plan' plan.id %}" class="btn btn-outline-danger" title="Dzēst plānu">
                                     <i class="fas fa-trash"></i>
                                 </a>
                                 {% endif %}
@@ -88,14 +88,14 @@
 
 <!-- Pagination -->
 {% if is_paginated %}
-<nav aria-label="Plans pagination" class="mt-4">
+<nav aria-label="Plānu lapas" class="mt-4">
     <ul class="pagination justify-content-center">
         {% if page_obj.has_previous %}
             <li class="page-item">
-                <a class="page-link" href="?page=1">First</a>
+                <a class="page-link" href="?page=1">Pirmā</a>
             </li>
             <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Iepriekšējā</a>
             </li>
         {% endif %}
         

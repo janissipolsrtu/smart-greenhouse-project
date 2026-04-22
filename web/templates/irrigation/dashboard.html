@@ -1,18 +1,18 @@
 {% extends 'base.html' %}
 
-{% block title %}Dashboard - Irrigation System{% endblock %}
+{% block title %}Pārskats - Gudrā siltumnīca{% endblock %}
 
 {% block content %}
 <div class="row mb-4">
     <div class="col">
         <h1 class="h2 mb-0">
-            <i class="fas fa-tachometer-alt me-2"></i>Dashboard
+            <i class="fas fa-tachometer-alt me-2"></i>Pārskats
         </h1>
-        <p class="text-muted">Overview of your irrigation system</p>
+        <p class="text-muted">Gudrās siltumnīcas sistēmas pārskats</p>
     </div>
     <div class="col-auto">
         <a href="{% url 'irrigation:create_plan' %}" class="btn btn-primary">
-            <i class="fas fa-plus me-2"></i>Create New Plan
+            <i class="fas fa-plus me-2"></i>Izveidot jaunu plānu
         </a>
     </div>
 </div>
@@ -24,7 +24,7 @@
             <div class="card-body text-center">
                 <i class="fas fa-list fa-2x mb-2"></i>
                 <h4 class="card-title">{{ total_plans }}</h4>
-                <p class="card-text mb-0">Total Plans</p>
+                <p class="card-text mb-0">Kopā plāni</p>
             </div>
         </div>
     </div>
@@ -33,7 +33,7 @@
             <div class="card-body text-center">
                 <i class="fas fa-clock fa-2x mb-2"></i>
                 <h4 class="card-title">{{ pending_plans }}</h4>
-                <p class="card-text mb-0">Pending Plans</p>
+                <p class="card-text mb-0">Gaidošie plāni</p>
             </div>
         </div>
     </div>
@@ -42,7 +42,7 @@
             <div class="card-body text-center">
                 <i class="fas fa-check-circle fa-2x mb-2"></i>
                 <h4 class="card-title">{{ completed_plans }}</h4>
-                <p class="card-text mb-0">Completed</p>
+                <p class="card-text mb-0">Pabeigti</p>
             </div>
         </div>
     </div>
@@ -51,7 +51,7 @@
             <div class="card-body text-center">
                 <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
                 <h4 class="card-title">{{ overdue_plans }}</h4>
-                <p class="card-text mb-0">Overdue</p>
+                <p class="card-text mb-0">Nokavēti</p>
             </div>
         </div>
     </div>
@@ -63,7 +63,7 @@
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="fas fa-calendar-alt me-2"></i>Upcoming Plans (Next 24h)
+                    <i class="fas fa-calendar-alt me-2"></i>Gaidāmie plāni (Nākošās 24h)
                 </h5>
             </div>
             <div class="card-body">
@@ -72,11 +72,11 @@
                         <table class="table table-hover">
                             <thead>
                                 <tr>
-                                    <th>Plan ID</th>
-                                    <th>Scheduled Time</th>
-                                    <th>Duration</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
+                                    <th>Plāna ID</th>
+                                    <th>Ieplānotais laiks</th>
+                                    <th>Ilgums</th>
+                                    <th>Statuss</th>
+                                    <th>Darbības</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -109,9 +109,9 @@
                 {% else %}
                     <div class="text-center text-muted py-4">
                         <i class="fas fa-calendar-times fa-3x mb-3"></i>
-                        <p>No upcoming plans in the next 24 hours</p>
+                        <p>Nav gaidāmu plānu nākošajās 24 stundās</p>
                         <a href="{% url 'irrigation:create_plan' %}" class="btn btn-outline-primary">
-                            Create Your First Plan
+                            Izveidot pirmo plānu
                         </a>
                     </div>
                 {% endif %}
@@ -124,7 +124,7 @@
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="fas fa-history me-2"></i>Recent Activity
+                    <i class="fas fa-history me-2"></i>Pēdējās aktivitātes
                 </h5>
             </div>
             <div class="card-body">
@@ -154,7 +154,7 @@
                 {% else %}
                     <div class="text-center text-muted">
                         <i class="fas fa-history fa-2x mb-2"></i>
-                        <p class="small">No recent activity</p>
+                        <p class="small">Nav pēdējo aktivitāšu</p>
                     </div>
                 {% endif %}
             </div>
@@ -164,22 +164,22 @@
         <div class="card mt-3">
             <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="fas fa-bolt me-2"></i>Quick Actions
+                    <i class="fas fa-bolt me-2"></i>Ātrās darbības
                 </h5>
             </div>
             <div class="card-body">
                 <div class="d-grid gap-2">
                     <a href="{% url 'irrigation:create_plan' %}" class="btn btn-primary">
-                        <i class="fas fa-plus me-2"></i>Create Plan
+                        <i class="fas fa-plus me-2"></i>Izveidot plānu
                     </a>
                     <a href="{% url 'irrigation:plan_list' %}" class="btn btn-outline-secondary">
-                        <i class="fas fa-list me-2"></i>View All Plans
+                        <i class="fas fa-list me-2"></i>Skatīt visus plānus
                     </a>
                     <a href="{% url 'irrigation:temperature_dashboard' %}" class="btn btn-outline-warning">
-                        <i class="fas fa-thermometer-half me-2"></i>Temperature Dashboard
+                        <i class="fas fa-thermometer-half me-2"></i>Temperatūras pārskats
                     </a>
                     <a href="http://localhost:5555" target="_blank" class="btn btn-outline-info">
-                        <i class="fas fa-chart-line me-2"></i>Monitor Tasks
+                        <i class="fas fa-chart-line me-2"></i>Uzraudzīt uzdevumus
                     </a>
                 </div>
             </div>

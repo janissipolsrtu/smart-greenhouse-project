@@ -1,14 +1,14 @@
 {% extends 'base.html' %}
 
-{% block title %}System Status - Irrigation System{% endblock %}
+{% block title %}Sistēmas statuss - Gudrā siltumnīca{% endblock %}
 
 {% block content %}
 <div class="row mb-4">
     <div class="col">
         <h1 class="h2 mb-0">
-            <i class="fas fa-server me-2"></i>System Status
+            <i class="fas fa-server me-2"></i>Sistēmas statuss
         </h1>
-        <p class="text-muted">Monitor system health and performance</p>
+        <p class="text-muted">Uzraudzīt sistēmas veselību un veiktspēju</p>
     </div>
 </div>
 
@@ -17,13 +17,13 @@
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="fas fa-heartbeat me-2"></i>System Health
+                    <i class="fas fa-heartbeat me-2"></i>Sistēmas veselība
                 </h5>
             </div>
             <div class="card-body text-center">
                 <i class="fas fa-check-circle fa-4x text-success mb-3"></i>
-                <h4 class="text-success">Operational</h4>
-                <p class="text-muted">All services running normally</p>
+                <h4 class="text-success">Darbojas</h4>
+                <p class="text-muted">Visi servisi darbojas normāli</p>
             </div>
         </div>
     </div>
@@ -32,12 +32,12 @@
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="fas fa-clock me-2"></i>Current Time
+                    <i class="fas fa-clock me-2"></i>Pašreizējais laiks
                 </h5>
             </div>
             <div class="card-body text-center">
                 <div class="h3 time-badge badge bg-primary mb-2" id="current_time"></div>
-                <p class="text-muted small mb-0">UTC Time</p>
+                <p class="text-muted small mb-0">UTC laiks</p>
             </div>
         </div>
     </div>
@@ -46,15 +46,15 @@
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="fas fa-chart-line me-2"></i>Monitoring
+                    <i class="fas fa-chart-line me-2"></i>Uzraudzība
                 </h5>
             </div>
             <div class="card-body text-center">
                 <a href="http://localhost:5555" target="_blank" class="btn btn-primary">
                     <i class="fas fa-external-link-alt me-2"></i>
-                    Open Flower Dashboard
+                    Atvērt Flower kontrolpaneli
                 </a>
-                <p class="text-muted small mt-2 mb-0">Task monitoring interface</p>
+                <p class="text-muted small mt-2 mb-0">Uzdevumu uzraudzības saskarne</p>
             </div>
         </div>
     </div>
@@ -65,13 +65,13 @@
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="fas fa-cogs me-2"></i>System Components
+                    <i class="fas fa-cogs me-2"></i>Sistēmas komponentes
                 </h5>
             </div>
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6">
-                        <h6>Backend Services</h6>
+                        <h6>Aizmugures pakalpojumi</h6>
                         <ul class="list-unstyled">
                             <li class="mb-2">
                                 <i class="fas fa-check text-success me-2"></i>
@@ -92,7 +92,7 @@
                         </ul>
                     </div>
                     <div class="col-md-6">
-                        <h6>Data & Monitoring</h6>
+                        <h6>Dati un uzraudzība</h6>
                         <ul class="list-unstyled">
                             <li class="mb-2">
                                 <i class="fas fa-check text-success me-2"></i>
@@ -100,15 +100,15 @@
                             </li>
                             <li class="mb-2">
                                 <i class="fas fa-check text-success me-2"></i>
-                                <strong>Django Web</strong> - Web Interface  
+                                <strong>Django Web</strong> - Tīmekļa saskarne  
                             </li>
                             <li class="mb-2">
                                 <i class="fas fa-check text-success me-2"></i>
-                                <strong>Flower</strong> - Task Monitoring
+                                <strong>Flower</strong> - Uzdevumu uzraudzība
                             </li>
                             <li class="mb-2">
                                 <i class="fas fa-check text-success me-2"></i>
-                                <strong>MQTT</strong> - Device Communication
+                                <strong>MQTT</strong> - Ierīču komunācīja
                             </li>
                         </ul>
                     </div>
