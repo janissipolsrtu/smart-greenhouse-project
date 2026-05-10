@@ -6,8 +6,8 @@ import os
 sys.path.append('/app')
 
 from celery_tasks import execute_irrigation
-from irrigation_db_service import IrrigationPlanService
-from models import IrrigationPlan
+from irrigation_db_service import WateringCycleService
+from models import WateringCycle
 from datetime import datetime
 
 def test_immediate_status_update():
@@ -15,14 +15,14 @@ def test_immediate_status_update():
     test_id = 'manual_test_' + str(int(datetime.utcnow().timestamp()))
     
     try:
-        created_plan = IrrigationPlanService.create_plan(
+        created_cycle = WateringCycleService.create_cycle(
             scheduled_time=datetime.utcnow(),
             duration=10,
             description='Manual test execution',
             device='irrigation_valve'
         )
-        print(f'✅ Created test plan: {created_plan.id}')
-        print(f'Initial status: {created_plan.status}')
+        print(f'✅ Created test cycle: {created_cycle.id}')
+        print(f'Initial status: {created_cycle.status}')
         
         # Execute irrigation task directly (not via Celery queue)
         print('\n🚀 Executing irrigation task...')

@@ -5,10 +5,10 @@ app_name = 'irrigation'
 
 urlpatterns = [
     path('', views.dashboard_view, name='dashboard'),
-    path('plans/', views.IrrigationPlanListView.as_view(), name='plan_list'),
-    path('plans/create/', views.create_plan_view, name='create_plan'),
-    path('plans/<str:plan_id>/', views.plan_detail_view, name='plan_detail'),
-    path('plans/<str:plan_id>/delete/', views.delete_plan_view, name='delete_plan'),
+    path('cycles/', views.WateringCycleListView.as_view(), name='cycle_list'),
+    path('cycles/create/', views.create_cycle_view, name='create_cycle'),
+    path('cycles/<str:cycle_id>/', views.cycle_detail_view, name='cycle_detail'),
+    path('cycles/<str:cycle_id>/delete/', views.delete_cycle_view, name='delete_cycle'),
     path('status/', views.system_status_view, name='system_status'),
     
     # Temperature Dashboard URLs

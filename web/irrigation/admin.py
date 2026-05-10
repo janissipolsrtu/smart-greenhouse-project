@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import IrrigationPlan, SensorData, Plant, PathCell
+from .models import WateringCycle, SensorData, Plant, PathCell
 
 
 @admin.register(SensorData)
@@ -17,8 +17,8 @@ class SensorDataAdmin(admin.ModelAdmin):
         return self.readonly_fields
 
 
-@admin.register(IrrigationPlan)
-class IrrigationPlanAdmin(admin.ModelAdmin):
+@admin.register(WateringCycle)
+class WateringCycleAdmin(admin.ModelAdmin):
     list_display = ['id', 'scheduled_time', 'duration', 'status', 'executed_at']
     list_filter = ['status', 'scheduled_time']
     search_fields = ['id']

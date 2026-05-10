@@ -5,11 +5,11 @@ from datetime import datetime, date
 from database import Base
 import uuid
 
-class IrrigationPlan(Base):
-    """Database model for irrigation plans"""
+class WateringCycle(Base):
+    """Database model for watering cycles"""
     __tablename__ = "irrigation_plans"
     
-    id = Column(String, primary_key=True, default=lambda: f"plan_{int(datetime.utcnow().timestamp())}_{uuid.uuid4().hex[:8]}")
+    id = Column(String, primary_key=True, default=lambda: f"cycle_{int(datetime.utcnow().timestamp())}_{uuid.uuid4().hex[:8]}")
     scheduled_time = Column(DateTime, nullable=False, index=True)  # Naive UTC datetime
     duration = Column(Integer, nullable=False)  # Duration in seconds
     description = Column(Text, nullable=True)
@@ -21,7 +21,7 @@ class IrrigationPlan(Base):
     result = Column(Text, nullable=True)
     
     def __repr__(self):
-        return f"<IrrigationPlan(id='{self.id}', scheduled_time='{self.scheduled_time}', status='{self.status}')>"
+        return f"<WateringCycle(id='{self.id}', scheduled_time='{self.scheduled_time}', status='{self.status}')>"
     
     def to_dict(self):
         """Convert model to dictionary"""

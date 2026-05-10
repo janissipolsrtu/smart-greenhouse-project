@@ -47,7 +47,7 @@ class SensorData(models.Model):
         return ""
 
 
-class IrrigationPlan(models.Model):
+class WateringCycle(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Pending'),
         ('executing', 'Executing'),
@@ -76,7 +76,7 @@ class IrrigationPlan(models.Model):
         ordering = ['-scheduled_time']
     
     def __str__(self):
-        return f"Irrigation Plan {self.id} - {self.scheduled_time}"
+        return f"Watering Cycle {self.id} - {self.scheduled_time}"
     
     @property
     def duration_minutes(self):
@@ -85,7 +85,7 @@ class IrrigationPlan(models.Model):
     
     @property
     def is_overdue(self):
-        """Check if the plan is overdue"""
+        """Check if the cycle is overdue"""
         return timezone.now() > self.scheduled_time and self.status == 'pending'
     
     @property

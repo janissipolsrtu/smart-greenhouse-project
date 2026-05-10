@@ -18,8 +18,8 @@ from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_ERROR
 
 # Database imports
 from database import init_database, test_database_connection
-from irrigation_db_service import IrrigationPlanService
-from models import IrrigationPlan
+from irrigation_db_service import WateringCycleService
+from models import WateringCycle
 
 # Configure logging
 logging.basicConfig(
@@ -53,27 +53,27 @@ def initialize_mqtt():
         mqtt_connected = False
         return False
 
-def update_plan_status(plan_id: str, status: str, result: str = None):
-    """Update the status of an irrigation plan (global function for APScheduler)"""
+def update_cycle_status(cycle_id: str, status: str, result: str = None):
+    """Update the status of a watering cycle (global function for APScheduler)"""
     try:
-        IrrigationPlanService.update_plan_status(
-            plan_id=plan_id,
+        WateringCycleService.update_cycle_status(
+            cycle_id=cycle_id,
             status=status,
             result=result,
             executed_at=datetime.now(timezone.utc) if status in ['executing', 'completed', 'failed'] else None
         )
-        logger.info(f"Updated plan {plan_id} status to: {status}")
+        logger.info(f"Updated cycle {cycle_id} status to: {status}")
     except Exception as e:
-        logger.error(f"Error updating plan status: {e}")
+        logger.error(f"Error updating cycle status: {e}")
 
-def execute_irrigation(plan_id: str, device: str, duration: int, description: str):
-    """Execute irrigation via MQTT timer service (global function for APScheduler)"""
+def execute_watering(cycle_id: str, device: str, duration: int, description: str):
+    """Execute watering via MQTT timer service (global function for APScheduler)"""
     global mqtt_client, mqtt_connected
     
-    logger.info(f"Executing irrigation {plan_id}: {duration}s - {description}")
+    logger.info(f"Executing watering cycle {cycle_id}: {duration}s - {description}")
     
-    # Update plan status to executing
-    update_plan_status(plan_id, "executing", f"Started at {datetime.now().isoformat()}")
+    # Update cycle status to executing
+    update_cycle_status(cycle_id, "executing", f"Started at {datetime.now().isoformat()}")
     
     try:
         # Send MQTT command to timer service
@@ -82,82 +82,82 @@ def execute_irrigation(plan_id: str, device: str, duration: int, description: st
             "duration": duration,
             "action": "schedule",
             "requested_by": "scheduler_service",
-            "plan_id": plan_id,
+            "cycle_id": cycle_id,
             "timestamp": datetime.now().isoformat()
         }
         
         if mqtt_connected and mqtt_client:
             result = mqtt_client.publish("irrigation/schedule/request", json.dumps(schedule_request))
             if result.rc == 0:
-                logger.info(f"Successfully sent irrigation command for plan {plan_id}")
-                update_plan_status(plan_id, "completed", f"Irrigation executed successfully for {duration}s")
+                logger.info(f"Successfully sent watering command for cycle {cycle_id}")
+                update_cycle_status(cycle_id, "completed", f"Watering executed successfully for {duration}s")
             else:
-                logger.error(f"Failed to publish MQTT message for plan {plan_id}")
-                update_plan_status(plan_id, "failed", "Failed to send MQTT command")
+                logger.error(f"Failed to publish MQTT message for cycle {cycle_id}")
+                update_cycle_status(cycle_id, "failed", "Failed to send MQTT command")
         else:
-            logger.error(f"MQTT not connected - cannot execute plan {plan_id}")
-            update_plan_status(plan_id, "failed", "MQTT connection not available")
+            logger.error(f"MQTT not connected - cannot execute cycle {cycle_id}")
+            update_cycle_status(cycle_id, "failed", "MQTT connection not available")
             
     except Exception as e:
-        logger.error(f"Error executing irrigation {plan_id}: {e}")
-        update_plan_status(plan_id, "failed", f"Execution error: {e}")
+        logger.error(f"Error executing watering cycle {cycle_id}: {e}")
+        update_cycle_status(cycle_id, "failed", f"Execution error: {e}")
 
-def periodic_irrigation_check():
-    """Periodic function to check database and execute due irrigation plans"""
+def periodic_watering_check():
+    """Periodic function to check database and execute due watering cycles"""
     try:
-        logger.info("Checking for due irrigation plans...")
+        logger.info("Checking for due watering cycles...")
         
-        # Get all pending plans from database
-        plans = IrrigationPlanService.get_pending_plans()
+        # Get all pending cycles from database
+        cycles = WateringCycleService.get_pending_cycles()
         
-        if not plans:
-            logger.debug("No pending irrigation plans found")
+        if not cycles:
+            logger.debug("No pending watering cycles found")
             return
             
-        logger.info(f"Found {len(plans)} pending irrigation plans")
+        logger.info(f"Found {len(cycles)} pending watering cycles")
         
         current_time = datetime.now(timezone.utc)
         executed_count = 0
         
-        for plan in plans:
+        for cycle in cycles:
             try:
-                scheduled_time = plan.scheduled_time
-                plan_id = plan.id
+                scheduled_time = cycle.scheduled_time
+                cycle_id = cycle.id
                 
                 # Check if it's time to execute (within 1 minute window)
                 time_diff = (current_time - scheduled_time).total_seconds()
                 
                 if time_diff >= 0 and time_diff <= 60:  # Execute if due (max 1 min late)
-                    logger.info(f"Executing due irrigation plan {plan_id}: {plan.description}")
+                    logger.info(f"Executing due watering cycle {cycle_id}: {cycle.description}")
                     
-                    # Execute irrigation directly
-                    execute_irrigation(
-                        plan_id=plan_id,
-                        device=plan.device or "0x540f57fffe890af8",
-                        duration=plan.duration,
-                        description=plan.description or 'Scheduled irrigation'
+                    # Execute watering directly
+                    execute_watering(
+                        cycle_id=cycle_id,
+                        device=cycle.device or "0x540f57fffe890af8",
+                        duration=cycle.duration,
+                        description=cycle.description or 'Scheduled watering'
                     )
                     
                     executed_count += 1
                     
                 elif time_diff > 60:  # More than 1 minute late
-                    logger.warning(f"Plan {plan_id} is {time_diff/60:.1f} minutes overdue - skipping")
-                    update_plan_status(plan_id, "failed", "Execution window missed")
+                    logger.warning(f"Cycle {cycle_id} is {time_diff/60:.1f} minutes overdue - skipping")
+                    update_cycle_status(cycle_id, "failed", "Execution window missed")
                     
                 else:
-                    # Plan is in the future
+                    # Cycle is in the future
                     time_until = -time_diff
                     if time_until < 300:  # Less than 5 minutes away
-                        logger.info(f"Plan {plan_id} due in {time_until/60:.1f} minutes")
+                        logger.info(f"Cycle {cycle_id} due in {time_until/60:.1f} minutes")
                         
             except Exception as e:
-                logger.error(f"Error processing plan {plan.id}: {e}")
+                logger.error(f"Error processing cycle {cycle.id}: {e}")
                 
         if executed_count > 0:
-            logger.info(f"Successfully executed {executed_count} irrigation plans")
+            logger.info(f"Successfully executed {executed_count} watering cycles")
             
     except Exception as e:
-        logger.error(f"Error in periodic irrigation check: {e}")
+        logger.error(f"Error in periodic watering check: {e}")
 
 class IrrigationSchedulerService:
     """Independent scheduler service for irrigation automation with PostgreSQL"""
@@ -219,12 +219,12 @@ class IrrigationSchedulerService:
             logger.error(f"Error connecting to MQTT: {e}")
             return False
             
-    def execute_irrigation(self, plan_id: str, device: str, duration: int, description: str):
-        """Execute irrigation via MQTT timer service"""
-        logger.info(f"Executing irrigation {plan_id}: {duration}s - {description}")
+    def execute_watering(self, cycle_id: str, device: str, duration: int, description: str):
+        """Execute watering via MQTT timer service"""
+        logger.info(f"Executing watering cycle {cycle_id}: {duration}s - {description}")
         
-        # Update plan status to executing
-        self.update_plan_status(plan_id, "executing", f"Started at {datetime.now().isoformat()}")
+        # Update cycle status to executing
+        self.update_cycle_status(cycle_id, "executing", f"Started at {datetime.now().isoformat()}")
         
         try:
             # Send MQTT command to timer service
@@ -240,20 +240,20 @@ class IrrigationSchedulerService:
             if self.mqtt_connected:
                 result = self.mqtt_client.publish("irrigation/schedule/request", json.dumps(schedule_request))
                 if result.rc == 0:
-                    logger.info(f"Successfully sent irrigation command for plan {plan_id}")
-                    self.update_plan_status(plan_id, "completed", f"Irrigation executed successfully for {duration}s")
+                    logger.info(f"Successfully sent watering command for cycle {cycle_id}")
+                    self.update_cycle_status(cycle_id, "completed", f"Watering executed successfully for {duration}s")
                 else:
-                    logger.error(f"Failed to publish MQTT message for plan {plan_id}")
-                    self.update_plan_status(plan_id, "failed", "Failed to send MQTT command")
+                    logger.error(f"Failed to publish MQTT message for cycle {cycle_id}")
+                    self.update_cycle_status(cycle_id, "failed", "Failed to send MQTT command")
             else:
-                logger.error(f"MQTT not connected - cannot execute plan {plan_id}")
-                self.update_plan_status(plan_id, "failed", "MQTT connection not available")
+                logger.error(f"MQTT not connected - cannot execute cycle {cycle_id}")
+                self.update_cycle_status(cycle_id, "failed", "MQTT connection not available")
                 
         except Exception as e:
-            logger.error(f"Error executing irrigation {plan_id}: {e}")
-            self.update_plan_status(plan_id, "failed", f"Execution error: {str(e)}")
+            logger.error(f"Error executing watering cycle {cycle_id}: {e}")
+            self.update_cycle_status(cycle_id, "failed", f"Execution error: {str(e)}")
             
-    def update_plan_status(self, plan_id: str, status: str, result: str):
+    def update_cycle_status(self, cycle_id: str, status: str, result: str):
         """Update irrigation plan status in JSON file"""
         try:
             if not os.path.exists(PLANS_FILE):

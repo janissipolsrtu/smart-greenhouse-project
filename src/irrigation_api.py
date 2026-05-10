@@ -23,7 +23,7 @@ from enum import Enum
 
 # Database imports
 from database import init_database, test_database_connection
-from irrigation_db_service import IrrigationPlanService
+from irrigation_db_service import WateringCycleService
 from plant_db_service import PlantService
 
 # Configure logging
@@ -31,13 +31,13 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Pydantic models for request/response
-class IrrigationCommand(BaseModel):
+class WateringCommand(BaseModel):
     action: str  # "ON" or "OFF"
 
-class IrrigationSchedule(BaseModel):
+class WateringSchedule(BaseModel):
     duration: int  # Duration in seconds
 
-class IrrigationPlanEntry(BaseModel):
+class WateringCycle(BaseModel):
     id: str = None
     scheduled_time: datetime
     duration: int  # Duration in seconds
@@ -54,7 +54,7 @@ class IrrigationPlanEntry(BaseModel):
             data['id'] = str(uuid.uuid4())
         super().__init__(**data)
 
-class IrrigationPlanRequest(BaseModel):
+class WateringCycleRequest(BaseModel):
     scheduled_time: str  # ISO format datetime string
     duration: int  # Duration in seconds
     description: Optional[str] = None
@@ -156,10 +156,10 @@ timer_service_status = {}  # Store timer service status
 # Database configuration
 DB_URL = os.getenv("DATABASE_URL", "postgresql://irrigation_user:irrigation_pass@postgres:5432/irrigation_db")
 
-# Irrigation plans storage (kept for compatibility)
-irrigation_plans: List[IrrigationPlanEntry] = []
-irrigation_plan = []  # Store scheduled irrigations
-plan_execution_lock = threading.Lock()
+# Watering cycles storage (kept for compatibility)
+watering_cycles: List[WateringCycle] = []
+watering_cycle = []  # Store scheduled waterings
+cycle_execution_lock = threading.Lock()
 
 class MQTTClient:
     def __init__(self):
@@ -206,18 +206,18 @@ class MQTTClient:
                 
                 # Check if this is a completion status for a planned irrigation
                 if (status_type == "schedule" and 
-                    "plan_entry_id" in payload and 
+                    "cycle_entry_id" in payload and 
                     "status" in payload):
                     
-                    plan_entry_id = payload["plan_entry_id"]
-                    irrigation_status = payload["status"]  # e.g., "completed", "failed"
+                    cycle_entry_id = payload["cycle_entry_id"]
+                    watering_status = payload["status"]  # e.g., "completed", "failed"
                     
-                    # Update the irrigation plan entry status
-                    with plan_execution_lock:
-                        for entry in irrigation_plan:
-                            if entry.id == plan_entry_id:
-                                entry.status = irrigation_status
-                                logger.info(f"Updated irrigation plan entry {plan_entry_id} status to: {irrigation_status}")
+                    # Update the watering cycle entry status
+                    with cycle_execution_lock:
+                        for entry in watering_cycle:
+                            if entry.id == cycle_entry_id:
+                                entry.status = watering_status
+                                logger.info(f"Updated watering cycle entry {cycle_entry_id} status to: {watering_status}")
                                 break
                 
         except Exception as e:
@@ -278,112 +278,112 @@ class MQTTClient:
 mqtt_client = MQTTClient()
 
 # Database operations for irrigation plans
-def load_irrigation_plans():
-    """Load irrigation plans from PostgreSQL database"""
-    global irrigation_plans
+def load_watering_cycles():
+    """Load watering cycles from PostgreSQL database"""
+    global watering_cycles
     try:
-        # Get plans from database using the service
-        db_plans = IrrigationPlanService.get_all_plans()
-        irrigation_plans = []
+        # Get cycles from database using the service
+        db_cycles = WateringCycleService.get_all_cycles()
+        watering_cycles = []
         
-        for db_plan in db_plans:
-            # Convert database model to IrrigationPlanEntry for compatibility
-            plan_entry = IrrigationPlanEntry(
-                id=db_plan.id,
-                scheduled_time=db_plan.scheduled_time,
-                duration=db_plan.duration,
-                description=db_plan.description,
-                created_at=db_plan.created_at,
-                status=db_plan.status
+        for db_cycle in db_cycles:
+            # Convert database model to WateringCycle for compatibility
+            cycle_entry = WateringCycle(
+                id=db_cycle.id,
+                scheduled_time=db_cycle.scheduled_time,
+                duration=db_cycle.duration,
+                description=db_cycle.description,
+                created_at=db_cycle.created_at,
+                status=db_cycle.status
             )
-            irrigation_plans.append(plan_entry)
+            watering_cycles.append(cycle_entry)
             
-        logger.info(f"Successfully loaded {len(irrigation_plans)} irrigation plans from database")
+        logger.info(f"Successfully loaded {len(watering_cycles)} watering cycles from database")
         
     except Exception as e:
-        logger.error(f"Error loading irrigation plans from database: {e}")
-        irrigation_plans = []
+        logger.error(f"Error loading watering cycles from database: {e}")
+        watering_cycles = []
 
-def save_irrigation_plans():
+def save_watering_cycles():
     """Save operation not needed - using database directly"""
     # This function is kept for compatibility but doesn't do anything
     # since we now save directly to database in the API endpoints
     pass
 
-def cleanup_old_plans():
-    """Remove completed plans older than 24 hours"""
-    global irrigation_plans
+def cleanup_old_cycles():
+    """Remove completed cycles older than 24 hours"""
+    global watering_cycles
     cutoff_time = datetime.utcnow() - timedelta(hours=24)
-    initial_count = len(irrigation_plans)
+    initial_count = len(watering_cycles)
     
-    irrigation_plans = [
-        plan for plan in irrigation_plans 
-        if not (plan.status in ["completed", "failed"] and plan.executed_at and plan.executed_at < cutoff_time)
+    watering_cycles = [
+        cycle for cycle in watering_cycles 
+        if not (cycle.status in ["completed", "failed"] and cycle.executed_at and cycle.executed_at < cutoff_time)
     ]
     
-    removed_count = initial_count - len(irrigation_plans)
+    removed_count = initial_count - len(watering_cycles)
     if removed_count > 0:
-        logger.info(f"Cleaned up {removed_count} old irrigation plan entries")
-        save_irrigation_plans()
+        logger.info(f"Cleaned up {removed_count} old watering cycle entries")
+        save_watering_cycles()
 
-async def execute_scheduled_irrigation(plan: IrrigationPlanEntry):
-    """Execute a scheduled irrigation plan"""
+async def execute_scheduled_watering(cycle: WateringCycle):
+    """Execute a scheduled watering cycle"""
     try:
-        plan.status = "executing"
-        plan.executed_at = datetime.utcnow()
-        save_irrigation_plans()
+        cycle.status = "executing"
+        cycle.executed_at = datetime.utcnow()
+        save_watering_cycles()
         
-        logger.info(f"Executing scheduled irrigation plan {plan.id}: {plan.duration}s")
+        logger.info(f"Executing scheduled watering cycle {cycle.id}: {cycle.duration}s")
         
         # Send schedule request to MQTT timer service
         schedule_request = {
             "device": DEVICES['irrigation_controller']['name'],
-            "duration": plan.duration,
+            "duration": cycle.duration,
             "action": "schedule",
             "requested_by": "scheduler",
-            "plan_id": plan.id,
+            "cycle_id": cycle.id,
             "timestamp": datetime.now().isoformat()
         }
         
         success = mqtt_client.publish("irrigation/schedule/request", schedule_request)
         
         if success:
-            plan.status = "completed"
-            plan.result = f"Successfully scheduled {plan.duration}s irrigation"
-            logger.info(f"Scheduled irrigation plan {plan.id} executed successfully")
+            cycle.status = "completed"
+            cycle.result = f"Successfully scheduled {cycle.duration}s watering"
+            logger.info(f"Scheduled watering cycle {cycle.id} executed successfully")
         else:
-            plan.status = "failed"
-            plan.result = "Failed to send command to MQTT timer service"
-            logger.error(f"Failed to execute irrigation plan {plan.id}")
+            cycle.status = "failed"
+            cycle.result = "Failed to send command to MQTT timer service"
+            logger.error(f"Failed to execute watering cycle {cycle.id}")
             
     except Exception as e:
-        plan.status = "failed"
-        plan.result = f"Execution error: {str(e)}"
-        logger.error(f"Error executing irrigation plan {plan.id}: {e}")
+        cycle.status = "failed"
+        cycle.result = f"Execution error: {str(e)}"
+        logger.error(f"Error executing watering cycle {cycle.id}: {e}")
     
-    save_irrigation_plans()
+    save_watering_cycles()
 
-async def irrigation_scheduler():
-    """Background task to check and execute scheduled irrigations"""
-    logger.info("Irrigation scheduler started")
+async def watering_scheduler():
+    """Background task to check and execute scheduled waterings"""
+    logger.info("Watering scheduler started")
     
     while True:
         try:
             current_time = datetime.utcnow()
             
-            # Find pending plans that should be executed
-            for plan in irrigation_plans:
-                if (plan.status == "pending" and 
-                    plan.scheduled_time <= current_time):
+            # Find pending cycles that should be executed
+            for cycle in watering_cycles:
+                if (cycle.status == "pending" and 
+                    cycle.scheduled_time <= current_time):
                     
-                    await execute_scheduled_irrigation(plan)
+                    await execute_scheduled_watering(cycle)
             
-            # Cleanup old plans every hour
+            # Cleanup old cycles every hour
             if current_time.minute == 0 and current_time.second < 30:
-                cleanup_old_plans()
+                cleanup_old_cycles()
                 
         except Exception as e:
-            logger.error(f"Error in irrigation scheduler: {e}")
+            logger.error(f"Error in watering scheduler: {e}")
         
         # Check every 30 seconds
         await asyncio.sleep(30)
@@ -431,8 +431,8 @@ async def get_temperature():
             detail="No temperature data available"
         )
 
-@app.post("/api/irrigation/control", response_model=ApiResponse, tags=["Irrigation"])
-async def control_irrigation(command: IrrigationCommand):
+@app.post("/api/watering/control", response_model=ApiResponse, tags=["Watering"])
+async def control_watering(command: WateringCommand):
     """Control irrigation system via MQTT timer service for consistent behavior"""
     try:
         action = command.action.upper()
@@ -476,9 +476,9 @@ async def control_irrigation(command: IrrigationCommand):
         logger.error(f"Error in irrigation control: {e}")
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
-@app.get("/api/irrigation/status", tags=["Irrigation"])
-async def get_irrigation_status():
-    """Get current irrigation system (0x540f57fffe890af8) status"""
+@app.get("/api/watering/status", tags=["Watering"])
+async def get_watering_status():
+    """Get current watering controller (0x540f57fffe890af8) status"""
     if 'irrigation_controller' in device_status:
         return ApiResponse(
             success=True,
@@ -491,8 +491,8 @@ async def get_irrigation_status():
             detail="No irrigation status available"
         )
 
-@app.post("/api/irrigation/schedule", response_model=ApiResponse, tags=["Irrigation"])
-async def schedule_irrigation(schedule: IrrigationSchedule):
+@app.post("/api/watering/schedule", response_model=ApiResponse, tags=["Watering"])
+async def schedule_watering(schedule: WateringSchedule):
     """
     Schedule irrigation with MQTT server-side timing (no network latency issues)
     Timing is handled by the timer service running on the Raspberry Pi
@@ -543,7 +543,7 @@ async def schedule_irrigation(schedule: IrrigationSchedule):
         logger.error(f"Error in irrigation scheduling: {e}")
         raise HTTPException(status_code=500, detail=f"Scheduling error: {str(e)}")
 
-@app.get("/api/irrigation/schedule/status", tags=["Irrigation"])
+@app.get("/api/watering/schedule/status", tags=["Watering"])
 async def get_schedule_status():
     """Get current irrigation schedule status from timer service"""
     if timer_service_status:
@@ -557,92 +557,6 @@ async def get_schedule_status():
             status_code=404,
             detail="No timer service status available"
         )
-
-@app.delete("/api/irrigation/plan/{entry_id}", response_model=ApiResponse, tags=["Irrigation Planning"])
-async def cancel_planned_irrigation(entry_id: str):
-    """Cancel a planned irrigation entry"""
-    global irrigation_plan
-    
-    # Find and remove the entry
-    entry_found = False
-    for i, entry in enumerate(irrigation_plan):
-        if entry.id == entry_id:
-            if entry.status == "executing":
-                raise HTTPException(
-                    status_code=400,
-                    detail="Cannot cancel irrigation that is currently executing"
-                )
-            irrigation_plan[i].status = "cancelled"
-            entry_found = True
-            break
-    
-    if not entry_found:
-        raise HTTPException(
-            status_code=404,
-            detail="Irrigation plan entry not found"
-        )
-    
-    return ApiResponse(
-        success=True,
-        message=f"Irrigation plan entry {entry_id} cancelled",
-        data={"cancelled_entry_id": entry_id}
-    )
-
-@app.put("/api/irrigation/plan/{entry_id}", response_model=ApiResponse, tags=["Irrigation Planning"])
-async def update_planned_irrigation(entry_id: str, plan_request: IrrigationPlanRequest):
-    """Update a planned irrigation entry"""
-    global irrigation_plan
-    
-    # Find the entry
-    entry_index = None
-    for i, entry in enumerate(irrigation_plan):
-        if entry.id == entry_id:
-            if entry.status not in ["pending"]:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Can only modify pending irrigation entries"
-                )
-            entry_index = i
-            break
-    
-    if entry_index is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Irrigation plan entry not found"
-        )
-    
-    # Parse and validate new scheduled time
-    try:
-        scheduled_dt = datetime.fromisoformat(plan_request.scheduled_time.replace('Z', '+00:00'))
-    except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid datetime format. Use ISO format"
-        )
-    
-    if scheduled_dt <= datetime.utcnow():
-        raise HTTPException(
-            status_code=400,
-            detail="Scheduled time must be in the future"
-        )
-    
-    # Validate duration
-    if plan_request.duration <= 0 or plan_request.duration > 3600:
-        raise HTTPException(
-            status_code=400,
-            detail="Duration must be between 1 and 3600 seconds"
-        )
-    
-    # Update the entry
-    irrigation_plan[entry_index].scheduled_time = scheduled_dt
-    irrigation_plan[entry_index].duration = plan_request.duration
-    irrigation_plan[entry_index].description = plan_request.description
-    
-    return ApiResponse(
-        success=True,
-        message="Irrigation plan entry updated successfully",
-        data={"updated_entry": irrigation_plan[entry_index].dict()}
-    )
 
 @app.get("/api/system/status", tags=["System"])
 async def system_status():
@@ -678,53 +592,54 @@ async def health_check():
         "mqtt_connected": mqtt_client.connected
     }
 
-# Irrigation Planning API Endpoints
-@app.get("/api/irrigation/plan", tags=["Irrigation Planning"])
-async def get_irrigation_plans():
-    """Get all scheduled irrigation plans"""
+# Watering Cycle API Endpoints
+# A watering cycle is a single planned watering event with a scheduled time and duration
+@app.get("/api/watering/cycle", tags=["Watering Cycle"])
+async def get_watering_cycles():
+    """Get all scheduled watering cycles (single planned watering events)"""
     # Reload from database to get latest data
-    load_irrigation_plans()
+    load_watering_cycles()
     
     return ApiResponse(
         success=True,
-        message=f"Retrieved {len(irrigation_plans)} irrigation plans",
+        message=f"Retrieved {len(watering_cycles)} watering cycles",
         data={
-            "plans": [plan.dict() for plan in irrigation_plans],
-            "total_count": len(irrigation_plans),
-            "pending_count": len([p for p in irrigation_plans if p.status == "pending"]),
-            "completed_count": len([p for p in irrigation_plans if p.status == "completed"])
+            "cycles": [cycle.dict() for cycle in watering_cycles],
+            "total_count": len(watering_cycles),
+            "pending_count": len([c for c in watering_cycles if c.status == "pending"]),
+            "completed_count": len([c for c in watering_cycles if c.status == "completed"])
         }
     )
 
-@app.post("/api/irrigation/plan", response_model=ApiResponse, tags=["Irrigation Planning"])
-async def add_irrigation_plan(plan: IrrigationPlanRequest):
-    """Add a new scheduled irrigation to the plan"""
+@app.post("/api/watering/cycle", response_model=ApiResponse, tags=["Watering Cycle"])
+async def add_watering_cycle(cycle: WateringCycleRequest):
+    """Add a new watering cycle (a single planned watering event)"""
     try:
         # Parse the scheduled time and handle timezone conversion
         try:
             # Parse the datetime
-            if plan.scheduled_time.endswith('Z'):
+            if cycle.scheduled_time.endswith('Z'):
                 # UTC timezone specified
-                scheduled_datetime = datetime.fromisoformat(plan.scheduled_time.replace('Z', '+00:00'))
-            elif '+' in plan.scheduled_time or plan.scheduled_time.endswith('00:00'):
+                scheduled_datetime = datetime.fromisoformat(cycle.scheduled_time.replace('Z', '+00:00'))
+            elif '+' in cycle.scheduled_time or cycle.scheduled_time.endswith('00:00'):
                 # Timezone offset specified in the string
-                scheduled_datetime = datetime.fromisoformat(plan.scheduled_time)
+                scheduled_datetime = datetime.fromisoformat(cycle.scheduled_time)
             else:
                 # No timezone in string, use the timezone parameter
-                local_datetime = datetime.fromisoformat(plan.scheduled_time)
+                local_datetime = datetime.fromisoformat(cycle.scheduled_time)
                 
                 # Convert based on timezone parameter
-                if plan.timezone and plan.timezone != "UTC":
-                    if plan.timezone in ["EEST", "UTC+3", "+03:00"]:
+                if cycle.timezone and cycle.timezone != "UTC":
+                    if cycle.timezone in ["EEST", "UTC+3", "+03:00"]:
                         # EEST is UTC+3, so subtract 3 hours to get UTC
                         scheduled_datetime = local_datetime - timedelta(hours=3)
-                    elif plan.timezone in ["EET", "UTC+2", "+02:00"]:
+                    elif cycle.timezone in ["EET", "UTC+2", "+02:00"]:
                         # EET is UTC+2, so subtract 2 hours to get UTC  
                         scheduled_datetime = local_datetime - timedelta(hours=2)
                     else:
                         # Default to treating as UTC if unknown timezone
                         scheduled_datetime = local_datetime
-                        logger.warning(f"Unknown timezone '{plan.timezone}', treating as UTC")
+                        logger.warning(f"Unknown timezone '{cycle.timezone}', treating as UTC")
                 else:
                     # Default to UTC
                     scheduled_datetime = local_datetime
@@ -743,65 +658,65 @@ async def add_irrigation_plan(plan: IrrigationPlanRequest):
             )
         
         # Validate duration
-        if plan.duration <= 0 or plan.duration > 3600:
+        if cycle.duration <= 0 or cycle.duration > 3600:
             raise HTTPException(
                 status_code=400,
                 detail="Duration must be between 1 and 3600 seconds"
             )
         
-        # Create plan in database using service
-        db_plan = IrrigationPlanService.create_plan(
+        # Create cycle in database using service
+        db_cycle = WateringCycleService.create_cycle(
             scheduled_time=scheduled_datetime,
-            duration=plan.duration,
-            description=plan.description or f"Irrigation for {plan.duration}s",
+            duration=cycle.duration,
+            description=cycle.description or f"Watering for {cycle.duration}s",
             device="0x540f57fffe890af8"  # Default irrigation controller
         )
         
-        # Reload plans from database
-        load_irrigation_plans()
+        # Reload cycles from database
+        load_watering_cycles()
         
         return ApiResponse(
             success=True,
-            message="Irrigation plan added successfully",
+            message="Watering cycle added successfully",
             data={
-                "plan": {
-                    "id": db_plan.id,
-                    "scheduled_time": db_plan.scheduled_time.isoformat(),
-                    "duration": db_plan.duration,
-                    "description": db_plan.description,
-                    "status": db_plan.status
+                "cycle": {
+                    "id": db_cycle.id,
+                    "scheduled_time": db_cycle.scheduled_time.isoformat(),
+                    "duration": db_cycle.duration,
+                    "description": db_cycle.description,
+                    "status": db_cycle.status
                 },
-                "total_plans": len(irrigation_plans)
+                "total_cycles": len(watering_cycles)
             }
         )
         
     except Exception as e:
-        logger.error(f"Error adding irrigation plan: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to add plan: {str(e)}")
+        logger.error(f"Error adding watering cycle: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to add cycle: {str(e)}")
 
-@app.put("/api/irrigation/plan/{plan_id}", response_model=ApiResponse, tags=["Irrigation Planning"])
-async def update_irrigation_plan(plan_id: str, plan: IrrigationPlanRequest):
-    """Update an existing irrigation plan (only if still pending)"""
+@app.put("/api/watering/cycle/{cycle_id}", response_model=ApiResponse, tags=["Watering Cycle"])
+async def update_watering_cycle(cycle_id: str, cycle: WateringCycleRequest):
+    """Update an existing watering cycle (only if still pending)"""
     try:
-        # Find the plan
-        plan_entry = None
-        for p in irrigation_plans:
-            if p.id == plan_id:
-                plan_entry = p
+        # Find the cycle
+        cycle_entry = None
+        for c in watering_cycles:
+            if c.id == cycle_id:
+                cycle_entry = c
                 break
         
-        if not plan_entry:
-            raise HTTPException(status_code=404, detail="Plan not found")
+        if not cycle_entry:
+            raise HTTPException(status_code=404, detail="Cycle not found")
         
-        if plan_entry.status != "pending":
+        if cycle_entry.status != "pending":
             raise HTTPException(
                 status_code=400, 
-                detail="Can only update pending plans"
+                detail="Can only update pending cycles"
             )
         
         # Parse the scheduled time
         try:
-            scheduled_datetime = datetime.fromisoformat(plan.scheduled_time.replace('Z', '+00:00'))
+            scheduled_datetime = datetime.fromisoformat(cycle.scheduled_time.replace('Z', '+00:00'))
         except ValueError:
             raise HTTPException(
                 status_code=400,
@@ -815,47 +730,47 @@ async def update_irrigation_plan(plan_id: str, plan: IrrigationPlanRequest):
                 detail="Scheduled time must be in the future"
             )
         
-        # Update plan
-        plan_entry.scheduled_time = scheduled_datetime
-        plan_entry.duration = plan.duration
-        plan_entry.description = plan.description or plan_entry.description
+        # Update cycle
+        cycle_entry.scheduled_time = scheduled_datetime
+        cycle_entry.duration = cycle.duration
+        cycle_entry.description = cycle.description or cycle_entry.description
         
-        save_irrigation_plans()
+        save_watering_cycles()
         
         return ApiResponse(
             success=True,
-            message="Irrigation plan updated successfully",
-            data={"plan": plan_entry.dict()}
+            message="Watering cycle updated successfully",
+            data={"cycle": cycle_entry.dict()}
         )
         
     except Exception as e:
-        logger.error(f"Error updating irrigation plan: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to update plan: {str(e)}")
+        logger.error(f"Error updating watering cycle: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update cycle: {str(e)}")
 
-@app.delete("/api/irrigation/plan/{plan_id}", response_model=ApiResponse, tags=["Irrigation Planning"])
-async def delete_irrigation_plan(plan_id: str):
-    """Delete/cancel an irrigation plan"""
+@app.delete("/api/watering/cycle/{cycle_id}", response_model=ApiResponse, tags=["Watering Cycle"])
+async def delete_watering_cycle(cycle_id: str):
+    """Delete/cancel a watering cycle"""
     try:
-        global irrigation_plans
+        global watering_cycles
         
-        # Find and remove the plan
-        original_count = len(irrigation_plans)
-        irrigation_plans = [p for p in irrigation_plans if p.id != plan_id]
+        # Find and remove the cycle
+        original_count = len(watering_cycles)
+        watering_cycles = [c for c in watering_cycles if c.id != cycle_id]
         
-        if len(irrigation_plans) == original_count:
-            raise HTTPException(status_code=404, detail="Plan not found")
+        if len(watering_cycles) == original_count:
+            raise HTTPException(status_code=404, detail="Cycle not found")
         
-        save_irrigation_plans()
+        save_watering_cycles()
         
         return ApiResponse(
             success=True,
-            message="Irrigation plan deleted successfully",
-            data={"remaining_plans": len(irrigation_plans)}
+            message="Watering cycle deleted successfully",
+            data={"remaining_cycles": len(watering_cycles)}
         )
         
     except Exception as e:
-        logger.error(f"Error deleting irrigation plan: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete plan: {str(e)}")
+        logger.error(f"Error deleting watering cycle: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete cycle: {str(e)}")
 
 # =================== PLANT MANAGEMENT API ENDPOINTS ===================
 
@@ -1130,27 +1045,27 @@ async def get_plants_ready_for_harvest():
 
 # =================== END PLANT MANAGEMENT API ENDPOINTS ===================
 
-def check_and_execute_scheduled_irrigations():
-    """Background task to check and execute scheduled irrigations"""
+def check_and_execute_scheduled_waterings():
+    """Background task to check and execute scheduled watering cycles"""
     while True:
         try:
             current_time = datetime.now()
             
-            with plan_execution_lock:
-                for entry in irrigation_plan[:]:  # Create a copy to iterate safely
+            with cycle_execution_lock:
+                for entry in watering_cycle[:]:  # Create a copy to iterate safely
                     if (entry.status == "pending" and 
                         entry.scheduled_time <= current_time):
                         
-                        logger.info(f"Executing scheduled irrigation: {entry.id}")
+                        logger.info(f"Executing scheduled watering: {entry.id}")
                         entry.status = "executing"
                         
-                        # Send irrigation request to MQTT timer service
+                        # Send watering request to MQTT timer service
                         schedule_request = {
                             "device": DEVICES['irrigation_controller']['name'],
                             "duration": entry.duration,
                             "action": "schedule",
-                            "requested_by": "irrigation_plan",
-                            "plan_entry_id": entry.id,
+                            "requested_by": "watering_cycle",
+                            "cycle_entry_id": entry.id,
                             "description": entry.description,
                             "timestamp": datetime.now().isoformat()
                         }
@@ -1158,18 +1073,18 @@ def check_and_execute_scheduled_irrigations():
                         success = mqtt_client.publish("irrigation/schedule/request", schedule_request)
                         
                         if success:
-                            logger.info(f"Successfully sent scheduled irrigation command for entry {entry.id}")
+                            logger.info(f"Successfully sent scheduled watering command for entry {entry.id}")
                             # Note: Status will be updated to "completed" when we receive confirmation
                             # via MQTT status updates. For now, we'll mark as executing.
                         else:
-                            logger.error(f"Failed to send scheduled irrigation command for entry {entry.id}")
+                            logger.error(f"Failed to send scheduled watering command for entry {entry.id}")
                             entry.status = "failed"
             
             # Sleep for 30 seconds before checking again
             time.sleep(30)
             
         except Exception as e:
-            logger.error(f"Error in scheduled irrigation checker: {e}")
+            logger.error(f"Error in scheduled watering checker: {e}")
             time.sleep(30)  # Continue checking even if there's an error
 
 def main():
@@ -1188,8 +1103,8 @@ def main():
     logger.info("Database connection successful")
     logger.info("Database initialized successfully")
     
-    # Load existing irrigation plans from database
-    load_irrigation_plans()
+    # Load existing watering cycles from database
+    load_watering_cycles()
     
     # Connect to MQTT
     if mqtt_client.connect():
@@ -1217,7 +1132,7 @@ def main():
     #     import asyncio
     #     loop = asyncio.new_event_loop()
     #     asyncio.set_event_loop(loop)
-    #     loop.run_until_complete(irrigation_scheduler())
+    #     loop.run_until_complete(watering_scheduler())
     # 
     # scheduler_thread = threading.Thread(target=start_scheduler, daemon=True)
     # scheduler_thread.start()

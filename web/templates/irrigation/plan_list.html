@@ -68,11 +68,11 @@
                         </td>
                         <td>
                             <div class="btn-group btn-group-sm" role="group">
-                                <a href="{% url 'irrigation:plan_detail' plan.id %}" class="btn btn-outline-primary" title="Skatīt detaļas">
+                                <a href="{% url 'irrigation:cycle_detail' plan.id %}" class="btn btn-outline-primary" title="Skatīt detaļas">
                                     <i class="fas fa-eye"></i>
                                 </a>
                                 {% if plan.status == 'pending' %}
-                                <a href="{% url 'irrigation:delete_plan' plan.id %}" class="btn btn-outline-danger" title="Dzēst plānu">
+                                <a href="{% url 'irrigation:delete_cycle' plan.id %}" class="btn btn-outline-danger" title="Dzēst ciklu">
                                     <i class="fas fa-trash"></i>
                                 </a>
                                 {% endif %}

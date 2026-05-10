@@ -6,14 +6,14 @@ import requests
 import json
 from datetime import datetime, timedelta
 
-def test_irrigation_plan_creation():
-    """Create a test irrigation plan"""
+def test_watering_cycle_creation():
+    """Create a test watering cycle"""
     
     # Calculate a time 2 minutes from now
     future_time = datetime.now() + timedelta(minutes=2)
     
-    # Create test irrigation plan
-    plan_data = {
+    # Create test watering cycle
+    cycle_data = {
         "scheduled_time": future_time.strftime("%Y-%m-%dT%H:%M:%S"),
         "duration": 30,
         "description": "Test APScheduler integration",
@@ -33,22 +33,22 @@ def test_irrigation_plan_creation():
         print(f"Response: {response.text}")
         
         if response.status_code == 200:
-            print("✅ Successfully created irrigation plan!")
+            print("✅ Successfully created watering cycle!")
         else:
-            print("❌ Failed to create irrigation plan")
+            print("❌ Failed to create watering cycle")
             
     except Exception as e:
         print(f"Error: {e}")
 
-def test_get_plans():
-    """Get current irrigation plans"""
+def test_get_cycles():
+    """Get current watering cycles"""
     try:
-        response = requests.get("http://localhost:8000/api/irrigation/plans")
-        print(f"Current plans: {response.json()}")
+        response = requests.get("http://localhost:8000/api/watering/cycle")
+        print(f"Current cycles: {response.json()}")
     except Exception as e:
-        print(f"Error getting plans: {e}")
+        print(f"Error getting cycles: {e}")
 
 if __name__ == "__main__":
-    print("🧪 Testing decoupled irrigation system...")
-    test_irrigation_plan_creation()
-    test_get_plans()
+    print("🧪 Testing decoupled watering system...")
+    test_watering_cycle_creation()
+    test_get_cycles()

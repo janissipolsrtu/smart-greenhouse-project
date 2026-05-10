@@ -6,21 +6,21 @@ from django.http import JsonResponse
 from django.db.models import Avg, Max, Min, Count, Q
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from .models import IrrigationPlan, SensorData, Plant, PathCell
+from .models import WateringCycle, SensorData, Plant, PathCell
 import uuid
 import time
 import json
 from datetime import datetime
 
 
-class IrrigationPlanListView(ListView):
-    model = IrrigationPlan
+class WateringCycleListView(ListView):
+    model = WateringCycle
     template_name = 'irrigation/plan_list.html'
-    context_object_name = 'plans'
+    context_object_name = 'cycles'
     paginate_by = 10
     
     def get_queryset(self):
-        return IrrigationPlan.objects.all().order_by('-scheduled_time')
+        return WateringCycle.objects.all().order_by('-scheduled_time')
 
 
 def dashboard_view(request):
@@ -28,44 +28,44 @@ def dashboard_view(request):
     now = timezone.now()
     
     # Get statistics
-    total_plans = IrrigationPlan.objects.count()
-    pending_plans = IrrigationPlan.objects.filter(status='pending').count()
-    completed_plans = IrrigationPlan.objects.filter(status='completed').count()
-    failed_plans = IrrigationPlan.objects.filter(status='failed').count()
+    total_cycles = WateringCycle.objects.count()
+    pending_cycles = WateringCycle.objects.filter(status='pending').count()
+    completed_cycles = WateringCycle.objects.filter(status='completed').count()
+    failed_cycles = WateringCycle.objects.filter(status='failed').count()
     
-    # Get upcoming plans (next 24 hours)
-    upcoming_plans = IrrigationPlan.objects.filter(
+    # Get upcoming cycles (next 24 hours)
+    upcoming_cycles = WateringCycle.objects.filter(
         scheduled_time__gte=now,
         scheduled_time__lte=now + timezone.timedelta(days=1),
         status='pending'
     ).order_by('scheduled_time')[:5]
     
-    # Get recent completed plans
-    recent_completed = IrrigationPlan.objects.filter(
+    # Get recent completed cycles
+    recent_completed = WateringCycle.objects.filter(
         status__in=['completed', 'failed']
     ).order_by('-executed_at')[:5]
     
-    # Get overdue plans
-    overdue_plans = IrrigationPlan.objects.filter(
+    # Get overdue cycles
+    overdue_cycles = WateringCycle.objects.filter(
         scheduled_time__lt=now,
         status='pending'
     ).count()
     
     context = {
-        'total_plans': total_plans,
-        'pending_plans': pending_plans,
-        'completed_plans': completed_plans, 
-        'failed_plans': failed_plans,
-        'overdue_plans': overdue_plans,
-        'upcoming_plans': upcoming_plans,
+        'total_cycles': total_cycles,
+        'pending_cycles': pending_cycles,
+        'completed_cycles': completed_cycles, 
+        'failed_cycles': failed_cycles,
+        'overdue_cycles': overdue_cycles,
+        'upcoming_cycles': upcoming_cycles,
         'recent_completed': recent_completed,
     }
     
     return render(request, 'irrigation/dashboard.html', context)
 
 
-def create_plan_view(request):
-    """Create a new irrigation plan"""
+def create_cycle_view(request):
+    """Create a new watering cycle"""
     if request.method == 'POST':
         try:
             scheduled_time = request.POST.get('scheduled_time')
@@ -78,14 +78,14 @@ def create_plan_view(request):
             if timezone.is_aware(scheduled_datetime):
                 scheduled_datetime = timezone.make_naive(scheduled_datetime, timezone.utc)
             
-            # Generate unique plan ID
+            # Generate unique cycle ID
             timestamp = int(time.time())
             unique_id = str(uuid.uuid4())[:8]
-            plan_id = f"plan_{timestamp}_{unique_id}"
+            cycle_id = f"cycle_{timestamp}_{unique_id}"
             
-            # Create the plan
-            plan = IrrigationPlan.objects.create(
-                id=plan_id,
+            # Create the cycle
+            cycle = WateringCycle.objects.create(
+                id=cycle_id,
                 scheduled_time=scheduled_datetime,
                 duration=duration,
                 device=device,
@@ -93,31 +93,31 @@ def create_plan_view(request):
                 status='pending'
             )
             
-            messages.success(request, f'Laistīšanas plāns {plan_id} veiksmīgi izveidots!')
+            messages.success(request, f'Laistīšanas cikls {cycle_id} veiksmīgi izveidots!')
             return redirect('irrigation:dashboard')
             
         except Exception as e:
-            messages.error(request, f'Kļūda izveidojot plānu: {str(e)}')
+            messages.error(request, f'Kļūda izveidojot ciklu: {str(e)}')
     
     return render(request, 'irrigation/create_plan.html')
 
 
-def plan_detail_view(request, plan_id):
-    """View details of a specific irrigation plan"""
-    plan = get_object_or_404(IrrigationPlan, id=plan_id)
-    return render(request, 'irrigation/plan_detail.html', {'plan': plan})
+def cycle_detail_view(request, cycle_id):
+    """View details of a specific watering cycle"""
+    cycle = get_object_or_404(WateringCycle, id=cycle_id)
+    return render(request, 'irrigation/plan_detail.html', {'cycle': cycle})
 
 
-def delete_plan_view(request, plan_id):
-    """Delete an irrigation plan"""
-    plan = get_object_or_404(IrrigationPlan, id=plan_id)
+def delete_cycle_view(request, cycle_id):
+    """Delete a watering cycle"""
+    cycle = get_object_or_404(WateringCycle, id=cycle_id)
     
     if request.method == 'POST':
-        plan.delete()
-        messages.success(request, f'Plāns {plan_id} veiksmīgi dzēsts!')
+        cycle.delete()
+        messages.success(request, f'Cikls {cycle_id} veiksmīgi dzēsts!')
         return redirect('irrigation:dashboard')
     
-    return render(request, 'irrigation/confirm_delete.html', {'plan': plan})
+    return render(request, 'irrigation/confirm_delete.html', {'cycle': cycle})
 
 
 def system_status_view(request):

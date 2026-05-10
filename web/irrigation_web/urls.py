@@ -7,7 +7,7 @@ from django.views.generic import RedirectView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', RedirectView.as_view(url='/irrigation/', permanent=False)),
-    path('irrigation/', include('irrigation.urls')),
+    path('', RedirectView.as_view(url='/watering/', permanent=False)),
+    path('watering/', include('irrigation.urls')),
     path('api/', include('irrigation.api_urls')),
 ]

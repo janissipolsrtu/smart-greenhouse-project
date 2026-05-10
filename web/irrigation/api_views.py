@@ -2,26 +2,26 @@ from rest_framework import serializers, viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.utils import timezone
-from .models import IrrigationPlan
+from .models import WateringCycle
 import uuid
 import time
 
 
-class IrrigationPlanSerializer(serializers.ModelSerializer):
+class WateringCycleSerializer(serializers.ModelSerializer):
     duration_minutes = serializers.ReadOnlyField()
     is_overdue = serializers.ReadOnlyField()
     device_display = serializers.CharField(source='get_device_display', read_only=True)
     
     class Meta:
-        model = IrrigationPlan
+        model = WateringCycle
         fields = '__all__'
     
     def create(self, validated_data):
-        # Generate unique plan ID if not provided
+        # Generate unique cycle ID if not provided
         if 'id' not in validated_data:
             timestamp = int(time.time())
             unique_id = str(uuid.uuid4())[:8]
-            validated_data['id'] = f"plan_{timestamp}_{unique_id}"
+            validated_data['id'] = f"cycle_{timestamp}_{unique_id}"
         
         # Set default device if not provided
         if 'device' not in validated_data:
@@ -30,9 +30,9 @@ class IrrigationPlanSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 
-class IrrigationPlanViewSet(viewsets.ModelViewSet):
-    queryset = IrrigationPlan.objects.all()
-    serializer_class = IrrigationPlanSerializer
+class WateringCycleViewSet(viewsets.ModelViewSet):
+    queryset = WateringCycle.objects.all()
+    serializer_class = WateringCycleSerializer
     
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -55,15 +55,15 @@ class IrrigationPlanViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def stats(self, request):
-        """Get irrigation system statistics"""
+        """Get watering system statistics"""
         now = timezone.now()
         
         stats = {
-            'total_plans': self.get_queryset().count(),
-            'pending_plans': self.get_queryset().filter(status='pending').count(),
-            'completed_plans': self.get_queryset().filter(status='completed').count(),
-            'failed_plans': self.get_queryset().filter(status='failed').count(),
-            'overdue_plans': self.get_queryset().filter(
+            'total_cycles': self.get_queryset().count(),
+            'pending_cycles': self.get_queryset().filter(status='pending').count(),
+            'completed_cycles': self.get_queryset().filter(status='completed').count(),
+            'failed_cycles': self.get_queryset().filter(status='failed').count(),
+            'overdue_cycles': self.get_queryset().filter(
                 scheduled_time__lt=now,
                 status='pending'
             ).count(),
@@ -78,7 +78,7 @@ class IrrigationPlanViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def upcoming(self, request):
-        """Get upcoming irrigation plans"""
+        """Get upcoming watering cycles"""
         now = timezone.now()
         upcoming = self.get_queryset().filter(
             scheduled_time__gte=now,
@@ -90,7 +90,7 @@ class IrrigationPlanViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def overdue(self, request):
-        """Get overdue irrigation plans"""
+        """Get overdue watering cycles"""
         now = timezone.now()
         overdue = self.get_queryset().filter(
             scheduled_time__lt=now,
