@@ -36,7 +36,7 @@ class WateringPlan(Base):
 
 class WateringCycle(Base):
     """Database model for watering cycles"""
-    __tablename__ = "irrigation_plans"
+    __tablename__ = "watering_cycle"
     
     id = Column(String, primary_key=True, default=lambda: f"cycle_{int(datetime.utcnow().timestamp())}_{uuid.uuid4().hex[:8]}")
     scheduled_time = Column(DateTime, nullable=False, index=True)  # Naive UTC datetime

@@ -104,7 +104,7 @@ class WateringCycle(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        db_table = 'irrigation_plans'
+        db_table = 'watering_cycle'
         ordering = ['-scheduled_time']
     
     def __str__(self):
