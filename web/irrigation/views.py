@@ -6,7 +6,8 @@ from django.http import JsonResponse
 from django.db.models import Avg, Max, Min, Count, Q
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from .models import WateringPlan, WateringCycle, SensorData, Plant, PathCell
+import os
+from .models import WateringPlan, WateringCycle, SensorData, Plant, PathCell, GreenhouseConfig
 import uuid
 import time
 import json
@@ -26,7 +27,11 @@ class WateringCycleListView(ListView):
 def dashboard_view(request):
     """Main dashboard view with overview"""
     now = timezone.now()
-    
+
+    # Greenhouse context
+    active_greenhouse = GreenhouseConfig.get_config()
+    all_greenhouses = GreenhouseConfig.objects.all().order_by('name')
+
     # Get statistics
     total_cycles = WateringCycle.objects.count()
     pending_cycles = WateringCycle.objects.filter(status='pending').count()
@@ -57,7 +62,7 @@ def dashboard_view(request):
         'total_plans': total_cycles,
         'pending_cycles': pending_cycles,
         'pending_plans': pending_cycles,
-        'completed_cycles': completed_cycles, 
+        'completed_cycles': completed_cycles,
         'completed_plans': completed_cycles,
         'failed_cycles': failed_cycles,
         'failed_plans': failed_cycles,
@@ -67,8 +72,10 @@ def dashboard_view(request):
         'upcoming_plans': upcoming_cycles,
         'recent_completed': recent_completed,
         'total_plan_containers': total_plan_containers,
+        'active_greenhouse': active_greenhouse,
+        'all_greenhouses': all_greenhouses,
     }
-    
+
     return render(request, 'irrigation/dashboard.html', context)
 
 
@@ -1122,3 +1129,118 @@ def paths_api(request):
             return JsonResponse({'success': False, 'error': f'Servera kļūda: {str(e)}'}, status=500)
     
     return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+
+# ---------------------------------------------------------------------------
+# Setup / Configuration views
+# ---------------------------------------------------------------------------
+
+def setup_view(request):
+    """List all greenhouse configurations."""
+    greenhouses = GreenhouseConfig.objects.all().order_by('name')
+    active = GreenhouseConfig.get_config()
+    return render(request, 'irrigation/setup.html', {
+        'greenhouses': greenhouses,
+        'active': active,
+    })
+
+
+def setup_greenhouse_view(request):
+    """Create or update a greenhouse record."""
+    if request.method == 'POST':
+        greenhouse_id = request.POST.get('greenhouse_id', '').strip()
+        name = request.POST.get('name', '').strip()
+        location = request.POST.get('location', '').strip()
+
+        if not name:
+            messages.error(request, 'Siltumnīcas nosaukums ir obligāts.')
+            return redirect('irrigation:setup')
+
+        if greenhouse_id:
+            config = get_object_or_404(GreenhouseConfig, pk=greenhouse_id)
+        else:
+            config = GreenhouseConfig()
+            # First greenhouse is automatically active
+            if not GreenhouseConfig.objects.exists():
+                config.is_active = True
+
+        config.name = name
+        config.location = location
+        config.save()
+        messages.success(request, 'Siltumnīcas konfigurācija saglabāta!')
+    return redirect('irrigation:setup')
+
+
+def setup_controller_view(request):
+    """Save or update controller connection settings for a specific greenhouse."""
+    if request.method == 'POST':
+        greenhouse_id = request.POST.get('greenhouse_id', '').strip()
+        controller_ip = request.POST.get('controller_ip', '').strip()
+        controller_username = request.POST.get('controller_username', '').strip()
+        controller_password = request.POST.get('controller_password', '').strip()
+
+        if greenhouse_id:
+            config = get_object_or_404(GreenhouseConfig, pk=greenhouse_id)
+        else:
+            config = GreenhouseConfig.get_config()
+
+        if config is None:
+            messages.error(request, 'Vispirms jākonfigurē siltumnīcas pamatdati.')
+            return redirect('irrigation:setup')
+
+        config.controller_ip = controller_ip or None
+        config.controller_username = controller_username
+        if controller_password:
+            config.set_password(controller_password)
+        config.save()
+        messages.success(request, 'Kontrollera iestatījumi saglabāti!')
+    return redirect('irrigation:setup')
+
+
+@require_http_methods(['POST'])
+def setup_select_greenhouse_view(request, greenhouse_id):
+    """Set a greenhouse as the active one."""
+    config = get_object_or_404(GreenhouseConfig, pk=greenhouse_id)
+    config.set_active()
+    messages.success(request, f'"{config.name}" iestatīta kā aktīvā siltumnīca.')
+    return redirect('irrigation:setup')
+
+
+@require_http_methods(['POST'])
+def setup_delete_greenhouse_view(request, greenhouse_id):
+    """Delete a greenhouse configuration."""
+    config = get_object_or_404(GreenhouseConfig, pk=greenhouse_id)
+    was_active = config.is_active
+    name = config.name
+    config.delete()
+    # If deleted was active, promote the next one
+    if was_active:
+        remaining = GreenhouseConfig.objects.first()
+        if remaining:
+            remaining.set_active()
+    messages.success(request, f'"{name}" dzēsta.')
+    return redirect('irrigation:setup')
+
+
+@require_http_methods(['POST'])
+def setup_pair_device_view(request):
+    """Trigger MQTT permit_join so a new Zigbee device can be paired."""
+    try:
+        import paho.mqtt.publish as publish
+
+        broker = os.environ.get('MQTT_BROKER', 'mosquitto')
+        port = int(os.environ.get('MQTT_PORT', 1883))
+        duration = int(request.POST.get('duration', 60))
+
+        payload = json.dumps({'value': True, 'time': duration})
+        publish.single(
+            topic='zigbee2mqtt/bridge/request/permit_join',
+            payload=payload,
+            hostname=broker,
+            port=port,
+        )
+        return JsonResponse({'success': True, 'message': f'Ierīces savienošana iespējota uz {duration} sekundēm.'})
+    except ImportError:
+        return JsonResponse({'success': False, 'error': 'paho-mqtt nav instalēts.'}, status=500)
+    except Exception as exc:
+        return JsonResponse({'success': False, 'error': str(exc)}, status=500)

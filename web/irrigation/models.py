@@ -205,6 +205,52 @@ class Plant(models.Model):
         super().save(*args, **kwargs)
 
 
+class GreenhouseConfig(models.Model):
+    """Configuration for a greenhouse and its controller. Multiple greenhouses supported."""
+
+    name = models.CharField(max_length=120, help_text="Siltumnīcas nosaukums")
+    location = models.CharField(max_length=200, blank=True, help_text="Siltumnīcas atrašanās vieta")
+    is_active = models.BooleanField(default=False, help_text="Aktīvā siltumnīca")
+    controller_ip = models.GenericIPAddressField(null=True, blank=True, help_text="Kontrollera IP adrese")
+    controller_username = models.CharField(max_length=100, blank=True, help_text="Kontrollera lietotājvārds")
+    controller_password = models.CharField(max_length=255, blank=True, help_text="Kontrollera parole (glabāta šifrēta)")
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'greenhouse_config'
+        verbose_name = "Greenhouse Configuration"
+
+    def __str__(self):
+        return f"{self.name} @ {self.location or 'nav norādīts'}"
+
+    @classmethod
+    def get_config(cls):
+        """Return the active greenhouse, falling back to the first one."""
+        return cls.objects.filter(is_active=True).first() or cls.objects.first()
+
+    def set_active(self):
+        """Mark this greenhouse as active and deactivate all others."""
+        GreenhouseConfig.objects.exclude(pk=self.pk).update(is_active=False)
+        self.is_active = True
+        self.save(update_fields=['is_active'])
+
+    def set_password(self, raw_password):
+        """Store a bcrypt hash of the controller password."""
+        import hashlib, os
+        salt = os.urandom(16).hex()
+        hashed = hashlib.sha256(f"{salt}{raw_password}".encode()).hexdigest()
+        self.controller_password = f"{salt}:{hashed}"
+
+    def check_password(self, raw_password):
+        """Verify a plain-text password against the stored hash."""
+        import hashlib
+        if ':' not in self.controller_password:
+            return False
+        salt, hashed = self.controller_password.split(':', 1)
+        return hashlib.sha256(f"{salt}{raw_password}".encode()).hexdigest() == hashed
+
+
 class PathCell(models.Model):
     """Model for storing greenhouse path cells (walkways between beds)"""
     

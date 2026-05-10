@@ -38,4 +38,12 @@ urlpatterns = [
     path('api/health/', views.health_check_api, name='health_check_api'),
     path('api/plants/', views.plants_api, name='plants_api'),
     path('api/paths/', views.paths_api, name='paths_api'),
+
+    # Setup / Configuration
+    path('setup/', views.setup_view, name='setup'),
+    path('setup/greenhouse/', views.setup_greenhouse_view, name='setup_greenhouse'),
+    path('setup/controller/', views.setup_controller_view, name='setup_controller'),
+    path('setup/pair-device/', views.setup_pair_device_view, name='setup_pair_device'),
+    path('setup/<int:greenhouse_id>/select/', views.setup_select_greenhouse_view, name='setup_select'),
+    path('setup/<int:greenhouse_id>/delete/', views.setup_delete_greenhouse_view, name='setup_delete'),
 ]

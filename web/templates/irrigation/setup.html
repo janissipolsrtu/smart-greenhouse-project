@@ -1,0 +1,297 @@
+﻿{% extends 'base.html' %}
+
+{% block title %}Siltumnīcu iestatīšana – Gudrā siltumnīca{% endblock %}
+
+{% block content %}
+<div class="row mb-4 align-items-center">
+  <div class="col">
+    <h1 class="h2 mb-0"><i class="fas fa-cog me-2"></i>Siltumnīcu pārvaldība</h1>
+    <p class="text-muted">Pievienojiet, rediģējiet un izvēlieties aktīvo siltumnīcu.</p>
+  </div>
+  <div class="col-auto">
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addGreenhouseModal">
+      <i class="fas fa-plus me-1"></i>Pievienot siltumnīcu
+    </button>
+  </div>
+</div>
+
+{% if messages %}
+  {% for msg in messages %}
+    <div class="alert alert-{{ msg.tags|default:"info" }} alert-dismissible fade show" role="alert">
+      {{ msg }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  {% endfor %}
+{% endif %}
+
+{% if not greenhouses %}
+  <div class="alert alert-warning d-flex align-items-center">
+    <i class="fas fa-exclamation-triangle fa-lg me-3"></i>
+    <div>Nav pievienotu siltumnīcu. Nospiediet <strong>Pievienot siltumnīcu</strong>, lai sāktu.</div>
+  </div>
+{% else %}
+
+<div class="row g-3 mb-4">
+  {% for gh in greenhouses %}
+  <div class="col-md-6 col-xl-4">
+    <div class="card h-100 {% if gh.is_active %}border-success border-2{% endif %}">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="fas fa-seedling text-success"></i>
+        <strong class="me-auto">{{ gh.name }}</strong>
+        {% if gh.is_active %}
+          <span class="badge bg-success"><i class="fas fa-check me-1"></i>Aktīva</span>
+        {% else %}
+          <form method="post" action="{% url "irrigation:setup_select" gh.pk %}" class="d-inline">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-outline-success">Izvēlēties</button>
+          </form>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-sm-4 text-muted">Atrašanās</dt>
+          <dd class="col-sm-8">{{ gh.location|default:"—" }}</dd>
+          <dt class="col-sm-4 text-muted">Kontrolleris</dt>
+          <dd class="col-sm-8">{% if gh.controller_ip %}<code>{{ gh.controller_ip }}</code>{% else %}—{% endif %}</dd>
+          <dt class="col-sm-4 text-muted">Lietotājs</dt>
+          <dd class="col-sm-8">{{ gh.controller_username|default:"—" }}</dd>
+          <dt class="col-sm-4 text-muted">Parole</dt>
+          <dd class="col-sm-8">{% if gh.controller_password %}••••••••{% else %}—{% endif %}</dd>
+        </dl>
+      </div>
+      <div class="card-footer d-flex gap-2">
+        <button class="btn btn-sm btn-outline-secondary"
+                onclick="openEditModal({{ gh.pk }}, '{{ gh.name|escapejs }}', '{{ gh.location|escapejs }}')">
+          <i class="fas fa-edit me-1"></i>Rediģēt
+        </button>
+        <button class="btn btn-sm btn-outline-secondary"
+                onclick="openControllerModal({{ gh.pk }}, '{{ gh.controller_ip|default:""|escapejs }}', '{{ gh.controller_username|escapejs }}')">
+          <i class="fas fa-network-wired me-1"></i>Kontrolleris
+        </button>
+        <form method="post" action="{% url "irrigation:setup_delete" gh.pk %}"
+              class="ms-auto"
+              onsubmit="return confirm('Dzēst {{ gh.name|escapejs }}?')">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-sm btn-outline-danger">
+            <i class="fas fa-trash"></i>
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if active %}
+<div class="card">
+  <div class="card-header d-flex align-items-center gap-2">
+    <i class="fas fa-bluetooth text-primary"></i>
+    <strong>Ierīces savienošana (MQTT) — {{ active.name }}</strong>
+  </div>
+  <div class="card-body">
+    <p class="text-muted small mb-3">
+      Nosūta MQTT ziņojumu uz <code>zigbee2mqtt/bridge/request/permit_join</code>, lai ļautu jaunu Zigbee ierīci savienot.
+    </p>
+    <div class="row g-3 align-items-end">
+      <div class="col-auto">
+        <label class="form-label">Laiks (sek.)</label>
+        <input type="number" id="pair-duration" class="form-control" value="60" min="10" max="254" style="width:110px">
+      </div>
+      <div class="col-auto">
+        <button id="pair-btn" class="btn btn-success" onclick="pairDevice()">
+          <i class="fas fa-bluetooth me-1"></i>Sākt savienošanu
+        </button>
+      </div>
+      <div class="col-auto"><div id="pair-status"></div></div>
+    </div>
+    <div id="pair-countdown" class="mt-3" style="display:none;">
+      <div class="progress" style="height:8px;">
+        <div id="pair-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-success"
+             role="progressbar" style="width:100%"></div>
+      </div>
+      <small class="text-muted mt-1 d-block">
+        Savienošanas režīms aktīvs – atlikušas <span id="pair-seconds"></span> sek.
+      </small>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endif %}
+
+<!-- Add greenhouse modal -->
+<div class="modal fade" id="addGreenhouseModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="{% url "irrigation:setup_greenhouse" %}">
+        {% csrf_token %}
+        <input type="hidden" name="greenhouse_id" value="">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="fas fa-plus me-2"></i>Pievienot siltumnīcu</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Nosaukums <span class="text-danger">*</span></label>
+            <input type="text" name="name" class="form-control" placeholder="piem., Mājas siltumnīca" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Atrašanās vieta</label>
+            <input type="text" name="location" class="form-control" placeholder="piem., Rīga, Latvija">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Atcelt</button>
+          <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i>Saglabāt</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit greenhouse modal -->
+<div class="modal fade" id="editGreenhouseModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="{% url "irrigation:setup_greenhouse" %}">
+        {% csrf_token %}
+        <input type="hidden" name="greenhouse_id" id="edit-gh-id">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="fas fa-edit me-2"></i>Rediģēt siltumnīcu</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Nosaukums <span class="text-danger">*</span></label>
+            <input type="text" name="name" id="edit-gh-name" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Atrašanās vieta</label>
+            <input type="text" name="location" id="edit-gh-location" class="form-control">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Atcelt</button>
+          <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i>Saglabāt</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Controller modal -->
+<div class="modal fade" id="controllerModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="{% url "irrigation:setup_controller" %}">
+        {% csrf_token %}
+        <input type="hidden" name="greenhouse_id" id="ctrl-gh-id">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="fas fa-network-wired me-2"></i>Kontrollera iestatījumi</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Kontrollera IP adrese</label>
+            <input type="text" name="controller_ip" id="ctrl-ip" class="form-control" placeholder="192.168.1.100">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Lietotājvārds</label>
+            <input type="text" name="controller_username" id="ctrl-user" class="form-control" placeholder="admin" autocomplete="off">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Parole</label>
+            <div class="input-group">
+              <input type="password" id="ctrl-pass" name="controller_password" class="form-control"
+                     placeholder="Atstājiet tukšu, lai nemainītu" autocomplete="new-password">
+              <button class="btn btn-outline-secondary" type="button" onclick="togglePass()">
+                <i class="fas fa-eye" id="eye-icon"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Atcelt</button>
+          <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i>Saglabāt</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openEditModal(id, name, location) {
+  document.getElementById('edit-gh-id').value = id;
+  document.getElementById('edit-gh-name').value = name;
+  document.getElementById('edit-gh-location').value = location;
+  new bootstrap.Modal(document.getElementById('editGreenhouseModal')).show();
+}
+
+function openControllerModal(id, ip, user) {
+  document.getElementById('ctrl-gh-id').value = id;
+  document.getElementById('ctrl-ip').value = ip;
+  document.getElementById('ctrl-user').value = user;
+  document.getElementById('ctrl-pass').value = '';
+  new bootstrap.Modal(document.getElementById('controllerModal')).show();
+}
+
+function togglePass() {
+  const f = document.getElementById('ctrl-pass');
+  const icon = document.getElementById('eye-icon');
+  if (f.type === 'password') { f.type = 'text'; icon.classList.replace('fa-eye','fa-eye-slash'); }
+  else { f.type = 'password'; icon.classList.replace('fa-eye-slash','fa-eye'); }
+}
+
+let pairTimer = null;
+function getCsrf() { const m = document.cookie.match(/csrftoken=([^;]+)/); return m ? m[1] : ''; }
+
+function pairDevice() {
+  const duration = parseInt(document.getElementById('pair-duration').value) || 60;
+  const btn = document.getElementById('pair-btn');
+  const status = document.getElementById('pair-status');
+  const countdown = document.getElementById('pair-countdown');
+  const bar = document.getElementById('pair-bar');
+  const secs = document.getElementById('pair-seconds');
+
+  btn.disabled = true;
+  status.innerHTML = '<span class="spinner-border spinner-border-sm text-success"></span> Savienojas...';
+
+  const fd = new FormData();
+  fd.append('duration', duration);
+
+  fetch('{% url "irrigation:setup_pair_device" %}', { method: 'POST', body: fd, headers: {'X-CSRFToken': getCsrf()} })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        status.innerHTML = `<span class="badge bg-success"><i class="fas fa-check me-1"></i>${data.message}</span>`;
+        startCountdown(duration, bar, secs, countdown, btn);
+      } else {
+        status.innerHTML = `<span class="badge bg-danger">${data.error}</span>`;
+        btn.disabled = false;
+      }
+    })
+    .catch(() => { status.innerHTML = '<span class="badge bg-danger">Savienojuma kļūda</span>'; btn.disabled = false; });
+}
+
+function startCountdown(total, bar, secs, wrapper, btn) {
+  let remaining = total;
+  wrapper.style.display = 'block';
+  secs.textContent = remaining;
+  clearInterval(pairTimer);
+  pairTimer = setInterval(() => {
+    remaining--;
+    secs.textContent = remaining;
+    bar.style.width = ((remaining / total) * 100) + '%';
+    if (remaining <= 0) {
+      clearInterval(pairTimer);
+      wrapper.style.display = 'none';
+      btn.disabled = false;
+      document.getElementById('pair-status').innerHTML = '<span class="badge bg-secondary">Savienošanas laiks beidzies</span>';
+    }
+  }, 1000);
+}
+</script>
+{% endblock %}
