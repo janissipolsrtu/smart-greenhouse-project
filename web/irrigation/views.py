@@ -170,6 +170,7 @@ def create_plan_view(request):
         try:
             name = request.POST.get('name', '').strip()
             description = request.POST.get('description', '').strip() or None
+            greenhouse_id = request.POST.get('greenhouse_config')
             start_date_raw = request.POST.get('start_date') or None
             end_date_raw = request.POST.get('end_date') or None
             active = request.POST.get('active') == 'on'
@@ -223,10 +224,15 @@ def create_plan_view(request):
             unique_id = str(uuid.uuid4())[:8]
             plan_id = f"plan_{timestamp}_{unique_id}"
 
+            greenhouse = None
+            if greenhouse_id:
+                greenhouse = get_object_or_404(GreenhouseConfig, pk=greenhouse_id)
+
             plan = WateringPlan.objects.create(
                 id=plan_id,
                 name=name,
                 description=description,
+                greenhouse_config=greenhouse,
                 start_date=start_date,
                 end_date=end_date,
                 active=active,
@@ -277,7 +283,13 @@ def create_plan_view(request):
         except Exception as e:
             messages.error(request, f'Kļūda izveidojot plānu: {str(e)}')
 
-    return render(request, 'irrigation/create_watering_plan.html')
+    active_greenhouse = GreenhouseConfig.get_config()
+    all_greenhouses = GreenhouseConfig.objects.all().order_by('name')
+    context = {
+        'active_greenhouse': active_greenhouse,
+        'all_greenhouses': all_greenhouses,
+    }
+    return render(request, 'irrigation/create_watering_plan.html', context)
 
 
 def plan_detail_view(request, plan_id):

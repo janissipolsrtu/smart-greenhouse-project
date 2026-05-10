@@ -53,6 +53,7 @@ class WateringPlan(models.Model):
     id = models.CharField(max_length=100, primary_key=True)
     name = models.CharField(max_length=120)
     description = models.TextField(blank=True, null=True)
+    greenhouse_config = models.ForeignKey('GreenhouseConfig', on_delete=models.SET_NULL, null=True, blank=True, related_name='watering_plans')
     start_date = models.DateField(blank=True, null=True)
     end_date = models.DateField(blank=True, null=True)
     active = models.BooleanField(default=True)
