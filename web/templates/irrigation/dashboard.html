@@ -61,46 +61,6 @@
   </div>
 </div>
 
-<!-- Statistics Cards -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card card-stat h-100">
-            <div class="card-body text-center">
-                <i class="fas fa-list fa-2x mb-2"></i>
-                <h4 class="card-title">{{ total_plans }}</h4>
-                <p class="card-text mb-0">Kopā plāni</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card card-stat success h-100">
-            <div class="card-body text-center">
-                <i class="fas fa-clock fa-2x mb-2"></i>
-                <h4 class="card-title">{{ pending_plans }}</h4>
-                <p class="card-text mb-0">Gaidošie plāni</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card card-stat warning h-100">
-            <div class="card-body text-center">
-                <i class="fas fa-check-circle fa-2x mb-2"></i>
-                <h4 class="card-title">{{ completed_plans }}</h4>
-                <p class="card-text mb-0">Pabeigti</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card card-stat danger h-100">
-            <div class="card-body text-center">
-                <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
-                <h4 class="card-title">{{ overdue_plans }}</h4>
-                <p class="card-text mb-0">Nokavēti</p>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- Upcoming Plans -->
 <div class="row">
     <div class="col-lg-8">
@@ -117,6 +77,7 @@
                             <thead>
                                 <tr>
                                     <th>Plāna ID</th>
+                                    <th>Siltumnīca</th>
                                     <th>Ieplānotais laiks</th>
                                     <th>Ilgums</th>
                                     <th>Statuss</th>
@@ -128,6 +89,13 @@
                                 <tr>
                                     <td>
                                         <code class="small">{{ plan.id|truncatechars:20 }}</code>
+                                    </td>
+                                    <td>
+                                        {% if plan.plan and plan.plan.greenhouse_config %}
+                                            <span class="badge bg-info">{{ plan.plan.greenhouse_config.name }}</span>
+                                        {% else %}
+                                            <span class="text-muted small">—</span>
+                                        {% endif %}
                                     </td>
                                     <td>
                                         <span class="time-badge badge bg-primary">
