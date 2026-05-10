@@ -4,7 +4,7 @@ from django.utils import timezone
 from django.views.generic import ListView
 from django.http import JsonResponse
 from django.db.models import Avg, Max, Min, Count, Q
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 import os
 from .models import WateringPlan, WateringCycle, SensorData, Plant, PathCell, GreenhouseConfig
@@ -57,9 +57,23 @@ def dashboard_view(request):
         status='pending'
     ).count()
     
-    # Generate greenhouse layout grid
-    max_rows = 10
-    max_columns = 10
+    # Generate greenhouse layout grid using the same persisted size as layout page
+    if active_greenhouse:
+        rows_key = f'layout_rows_{active_greenhouse.pk}'
+        columns_key = f'layout_columns_{active_greenhouse.pk}'
+    else:
+        rows_key = 'layout_rows_default'
+        columns_key = 'layout_columns_default'
+
+    def _safe_grid_size(value, default):
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return default
+        return max(5, min(20, parsed))
+
+    max_rows = _safe_grid_size(request.session.get(rows_key), 10)
+    max_columns = _safe_grid_size(request.session.get(columns_key), 10)
     plants = Plant.objects.filter(active=True)
     paths = PathCell.objects.all()
     
@@ -856,14 +870,47 @@ def deactivate_plant_view(request, plant_id):
     return render(request, 'irrigation/confirm_deactivate_plant.html', {'plant': plant})
 
 
+@ensure_csrf_cookie
 def greenhouse_layout_view(request):
     """Display greenhouse layout with plant positions and paths (FR-15)"""
-    max_rows = int(request.GET.get('rows', 10))
-    max_columns = int(request.GET.get('columns', 10))
-    
     # Greenhouse context
     active_greenhouse = GreenhouseConfig.get_config()
     all_greenhouses = GreenhouseConfig.objects.all().order_by('name')
+
+    # Resolve layout size keys per active greenhouse
+    if active_greenhouse:
+        rows_key = f'layout_rows_{active_greenhouse.pk}'
+        columns_key = f'layout_columns_{active_greenhouse.pk}'
+    else:
+        rows_key = 'layout_rows_default'
+        columns_key = 'layout_columns_default'
+
+    def _safe_grid_size(value, default):
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return default
+        return max(5, min(20, parsed))
+
+    # Update size via POST
+    if request.method == 'POST':
+        max_rows = _safe_grid_size(request.POST.get('rows'), 10)
+        max_columns = _safe_grid_size(request.POST.get('columns'), 10)
+
+        request.session[rows_key] = max_rows
+        request.session[columns_key] = max_columns
+
+        return JsonResponse({
+            'success': True,
+            'rows': max_rows,
+            'columns': max_columns,
+        })
+
+    # Read persisted size for GET (query params still allowed as fallback)
+    default_rows = request.session.get(rows_key, 10)
+    default_columns = request.session.get(columns_key, 10)
+    max_rows = _safe_grid_size(request.GET.get('rows'), default_rows)
+    max_columns = _safe_grid_size(request.GET.get('columns'), default_columns)
     
     # Get all active plants and path cells
     plants = Plant.objects.filter(active=True)

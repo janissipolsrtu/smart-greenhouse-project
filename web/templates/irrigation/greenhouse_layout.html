@@ -400,9 +400,45 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Apply grid size
     document.getElementById('apply-grid-size').addEventListener('click', function() {
-        const rows = document.getElementById('grid-rows').value;
-        const columns = document.getElementById('grid-columns').value;
-        window.location.href = `?rows=${rows}&columns=${columns}`;
+        const rowsInput = document.getElementById('grid-rows');
+        const columnsInput = document.getElementById('grid-columns');
+
+        let rows = parseInt(rowsInput.value, 10);
+        let columns = parseInt(columnsInput.value, 10);
+
+        if (Number.isNaN(rows)) rows = 10;
+        if (Number.isNaN(columns)) columns = 10;
+
+        rows = Math.min(20, Math.max(5, rows));
+        columns = Math.min(20, Math.max(5, columns));
+
+        rowsInput.value = rows;
+        columnsInput.value = columns;
+
+        fetch(window.location.pathname, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                'X-CSRFToken': getCsrfToken(),
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: new URLSearchParams({
+                rows: String(rows),
+                columns: String(columns)
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.location.reload();
+            } else {
+                alert('Kļūda atjauninot izmēru');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Kļūda atjauninot izmēru');
+        });
     });
     
     // Add plant mode toggle
