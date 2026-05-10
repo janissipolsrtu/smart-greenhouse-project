@@ -36,6 +36,21 @@ def init_database():
     try:
         logger.info("Initializing database...")
         Base.metadata.create_all(bind=engine)
+        # Backward-compatible schema update for existing databases.
+        # create_all does not add new columns to existing tables.
+        with engine.begin() as conn:
+            columns = [row["column_name"] for row in conn.execute(text(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'irrigation_plans'
+                """
+            )).mappings().all()]
+            if "plan_id" not in columns:
+                conn.execute(text("ALTER TABLE irrigation_plans ADD COLUMN plan_id VARCHAR"))
+                logger.info("Added plan_id column to irrigation_plans")
+
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_irrigation_plans_plan_id ON irrigation_plans (plan_id)"))
         logger.info("Database initialized successfully")
         return True
     except Exception as e:

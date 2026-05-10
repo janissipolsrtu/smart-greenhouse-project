@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 import logging
 
-from models import WateringCycle
+from models import WateringCycle, WateringPlan
 from database import SessionLocal
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,8 @@ class WateringCycleService:
         scheduled_time: datetime,
         duration: int,
         description: str = None,
-        device: str = "0x540f57fffe890af8"  # Correct Zigbee device ID
+        device: str = "0x540f57fffe890af8",  # Correct Zigbee device ID
+        plan_id: str = None,
     ) -> WateringCycle:
         """Create a new watering cycle"""
         db = SessionLocal()
@@ -27,7 +28,8 @@ class WateringCycleService:
                 scheduled_time=scheduled_time,
                 duration=duration,
                 description=description,
-                device=device
+                device=device,
+                plan_id=plan_id,
             )
             db.add(cycle)
             db.commit()
@@ -109,6 +111,84 @@ class WateringCycleService:
             return False
         finally:
             db.close()
+
+    @staticmethod
+    def update_cycle(
+        cycle_id: str,
+        scheduled_time: datetime,
+        duration: int,
+        description: str = None,
+        plan_id: str = None,
+    ) -> Optional[WateringCycle]:
+        """Update editable watering cycle fields for a pending cycle"""
+        db = SessionLocal()
+        try:
+            cycle = db.query(WateringCycle).filter(WateringCycle.id == cycle_id).first()
+            if not cycle:
+                logger.warning(f"Cycle not found: {cycle_id}")
+                return None
+
+            if cycle.status != "pending":
+                logger.warning(f"Cannot update non-pending cycle: {cycle_id}")
+                return None
+
+            cycle.scheduled_time = scheduled_time
+            cycle.duration = duration
+            cycle.description = description or cycle.description
+            cycle.plan_id = plan_id
+
+            db.commit()
+            db.refresh(cycle)
+            logger.info(f"Updated watering cycle: {cycle_id}")
+            return cycle
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error updating watering cycle: {e}")
+            raise
+        finally:
+            db.close()
+
+    @staticmethod
+    def assign_cycle_to_plan(cycle_id: str, plan_id: str) -> Optional[WateringCycle]:
+        """Assign a cycle to a watering plan"""
+        db = SessionLocal()
+        try:
+            cycle = db.query(WateringCycle).filter(WateringCycle.id == cycle_id).first()
+            if not cycle:
+                return None
+
+            plan = db.query(WateringPlan).filter(WateringPlan.id == plan_id).first()
+            if not plan:
+                return None
+
+            cycle.plan_id = plan_id
+            db.commit()
+            db.refresh(cycle)
+            return cycle
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    @staticmethod
+    def unassign_cycle_from_plan(cycle_id: str) -> Optional[WateringCycle]:
+        """Remove cycle from its watering plan (optional membership)"""
+        db = SessionLocal()
+        try:
+            cycle = db.query(WateringCycle).filter(WateringCycle.id == cycle_id).first()
+            if not cycle:
+                return None
+
+            cycle.plan_id = None
+            db.commit()
+            db.refresh(cycle)
+            return cycle
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
     
     @staticmethod
     def delete_cycle(cycle_id: str) -> bool:
@@ -142,5 +222,117 @@ class WateringCycleService:
             ).group_by(WateringCycle.status).all()
             
             return {status: count for status, count in counts}
+        finally:
+            db.close()
+
+
+class WateringPlanService:
+    """Service class for watering plan container operations"""
+
+    @staticmethod
+    def create_plan(
+        name: str,
+        description: str = None,
+        start_date=None,
+        end_date=None,
+        active: bool = True,
+    ) -> WateringPlan:
+        db = SessionLocal()
+        try:
+            plan = WateringPlan(
+                name=name,
+                description=description,
+                start_date=start_date,
+                end_date=end_date,
+                active=active,
+            )
+            db.add(plan)
+            db.commit()
+            db.refresh(plan)
+            return plan
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    @staticmethod
+    def get_plan(plan_id: str) -> Optional[WateringPlan]:
+        db = SessionLocal()
+        try:
+            return db.query(WateringPlan).filter(WateringPlan.id == plan_id).first()
+        finally:
+            db.close()
+
+    @staticmethod
+    def get_all_plans(active_only: bool = False, limit: int = 100) -> List[WateringPlan]:
+        db = SessionLocal()
+        try:
+            query = db.query(WateringPlan)
+            if active_only:
+                query = query.filter(WateringPlan.active == True)
+            return query.order_by(desc(WateringPlan.created_at)).limit(limit).all()
+        finally:
+            db.close()
+
+    @staticmethod
+    def get_plan_cycles(plan_id: str) -> List[WateringCycle]:
+        db = SessionLocal()
+        try:
+            return db.query(WateringCycle).filter(WateringCycle.plan_id == plan_id).order_by(asc(WateringCycle.scheduled_time)).all()
+        finally:
+            db.close()
+
+    @staticmethod
+    def update_plan(
+        plan_id: str,
+        name: str = None,
+        description: str = None,
+        start_date=None,
+        end_date=None,
+        active: bool = None,
+    ) -> Optional[WateringPlan]:
+        db = SessionLocal()
+        try:
+            plan = db.query(WateringPlan).filter(WateringPlan.id == plan_id).first()
+            if not plan:
+                return None
+
+            if name is not None:
+                plan.name = name
+            if description is not None:
+                plan.description = description
+            if start_date is not None:
+                plan.start_date = start_date
+            if end_date is not None:
+                plan.end_date = end_date
+            if active is not None:
+                plan.active = active
+
+            db.commit()
+            db.refresh(plan)
+            return plan
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    @staticmethod
+    def delete_plan(plan_id: str) -> bool:
+        """Delete plan and unassign all linked cycles"""
+        db = SessionLocal()
+        try:
+            plan = db.query(WateringPlan).filter(WateringPlan.id == plan_id).first()
+            if not plan:
+                return False
+
+            db.query(WateringCycle).filter(WateringCycle.plan_id == plan_id).update({WateringCycle.plan_id: None})
+            db.delete(plan)
+            db.commit()
+            return True
+        except Exception:
+            db.rollback()
+            raise
         finally:
             db.close()

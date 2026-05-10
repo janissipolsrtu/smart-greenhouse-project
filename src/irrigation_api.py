@@ -23,7 +23,7 @@ from enum import Enum
 
 # Database imports
 from database import init_database, test_database_connection
-from irrigation_db_service import WateringCycleService
+from irrigation_db_service import WateringCycleService, WateringPlanService
 from plant_db_service import PlantService
 
 # Configure logging
@@ -48,6 +48,7 @@ class WateringCycle(BaseModel):
     status: str = "pending"  # pending, executing, completed, failed, cancelled
     executed_at: Optional[datetime] = None
     result: Optional[str] = None
+    plan_id: Optional[str] = None
     
     def __init__(self, **data):
         if 'id' not in data or data['id'] is None:
@@ -59,6 +60,23 @@ class WateringCycleRequest(BaseModel):
     duration: int  # Duration in seconds
     description: Optional[str] = None
     timezone: Optional[str] = "UTC"  # Default to UTC, can be "EEST", "UTC+3", etc.
+    plan_id: Optional[str] = None
+
+
+class WateringPlanRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    active: bool = True
+
+
+class WateringPlanUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    active: Optional[bool] = None
 
 class ApiResponse(BaseModel):
     success: bool
@@ -294,7 +312,8 @@ def load_watering_cycles():
                 duration=db_cycle.duration,
                 description=db_cycle.description,
                 created_at=db_cycle.created_at,
-                status=db_cycle.status
+                status=db_cycle.status,
+                plan_id=db_cycle.plan_id,
             )
             watering_cycles.append(cycle_entry)
             
@@ -593,13 +612,11 @@ async def health_check():
     }
 
 # Watering Cycle API Endpoints
-# A watering cycle is a single planned watering event with a scheduled time and duration
 @app.get("/api/watering/cycle", tags=["Watering Cycle"])
 async def get_watering_cycles():
-    """Get all scheduled watering cycles (single planned watering events)"""
-    # Reload from database to get latest data
+    """Get all planned watering cycles (assigned and unassigned)"""
     load_watering_cycles()
-    
+
     return ApiResponse(
         success=True,
         message=f"Retrieved {len(watering_cycles)} watering cycles",
@@ -607,74 +624,88 @@ async def get_watering_cycles():
             "cycles": [cycle.dict() for cycle in watering_cycles],
             "total_count": len(watering_cycles),
             "pending_count": len([c for c in watering_cycles if c.status == "pending"]),
-            "completed_count": len([c for c in watering_cycles if c.status == "completed"])
+            "completed_count": len([c for c in watering_cycles if c.status == "completed"]),
+            "assigned_count": len([c for c in watering_cycles if c.plan_id]),
         }
     )
 
+
+@app.get("/api/watering/cycle/{cycle_id}", tags=["Watering Cycle"])
+async def get_watering_cycle(cycle_id: str):
+    """Get a single watering cycle"""
+    try:
+        db_cycle = WateringCycleService.get_cycle(cycle_id)
+        if not db_cycle:
+            raise HTTPException(status_code=404, detail="Cycle not found")
+
+        return ApiResponse(
+            success=True,
+            message="Retrieved watering cycle",
+            data={"cycle": WateringCycle(
+                id=db_cycle.id,
+                scheduled_time=db_cycle.scheduled_time,
+                duration=db_cycle.duration,
+                description=db_cycle.description,
+                created_at=db_cycle.created_at,
+                status=db_cycle.status,
+                plan_id=db_cycle.plan_id,
+            ).dict()}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving watering cycle: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve cycle: {str(e)}")
+
+
 @app.post("/api/watering/cycle", response_model=ApiResponse, tags=["Watering Cycle"])
 async def add_watering_cycle(cycle: WateringCycleRequest):
-    """Add a new watering cycle (a single planned watering event)"""
+    """Create a watering cycle. Assigning it to a plan is optional."""
     try:
-        # Parse the scheduled time and handle timezone conversion
         try:
-            # Parse the datetime
             if cycle.scheduled_time.endswith('Z'):
-                # UTC timezone specified
                 scheduled_datetime = datetime.fromisoformat(cycle.scheduled_time.replace('Z', '+00:00'))
             elif '+' in cycle.scheduled_time or cycle.scheduled_time.endswith('00:00'):
-                # Timezone offset specified in the string
                 scheduled_datetime = datetime.fromisoformat(cycle.scheduled_time)
             else:
-                # No timezone in string, use the timezone parameter
                 local_datetime = datetime.fromisoformat(cycle.scheduled_time)
-                
-                # Convert based on timezone parameter
                 if cycle.timezone and cycle.timezone != "UTC":
                     if cycle.timezone in ["EEST", "UTC+3", "+03:00"]:
-                        # EEST is UTC+3, so subtract 3 hours to get UTC
                         scheduled_datetime = local_datetime - timedelta(hours=3)
                     elif cycle.timezone in ["EET", "UTC+2", "+02:00"]:
-                        # EET is UTC+2, so subtract 2 hours to get UTC  
                         scheduled_datetime = local_datetime - timedelta(hours=2)
                     else:
-                        # Default to treating as UTC if unknown timezone
                         scheduled_datetime = local_datetime
                         logger.warning(f"Unknown timezone '{cycle.timezone}', treating as UTC")
                 else:
-                    # Default to UTC
                     scheduled_datetime = local_datetime
-                    
         except ValueError:
             raise HTTPException(
                 status_code=400,
                 detail="Invalid datetime format. Use ISO format (e.g., '2023-12-25T10:30:00') with optional timezone"
             )
-        
-        # Validate schedule time is in the future
+
         if scheduled_datetime <= datetime.now():
-            raise HTTPException(
-                status_code=400,
-                detail="Scheduled time must be in the future"
-            )
-        
-        # Validate duration
+            raise HTTPException(status_code=400, detail="Scheduled time must be in the future")
+
         if cycle.duration <= 0 or cycle.duration > 3600:
-            raise HTTPException(
-                status_code=400,
-                detail="Duration must be between 1 and 3600 seconds"
-            )
-        
-        # Create cycle in database using service
+            raise HTTPException(status_code=400, detail="Duration must be between 1 and 3600 seconds")
+
+        if cycle.plan_id:
+            existing_plan = WateringPlanService.get_plan(cycle.plan_id)
+            if not existing_plan:
+                raise HTTPException(status_code=404, detail="Plan not found")
+
         db_cycle = WateringCycleService.create_cycle(
             scheduled_time=scheduled_datetime,
             duration=cycle.duration,
             description=cycle.description or f"Watering for {cycle.duration}s",
-            device="0x540f57fffe890af8"  # Default irrigation controller
+            device="0x540f57fffe890af8",
+            plan_id=cycle.plan_id,
         )
-        
-        # Reload cycles from database
+
         load_watering_cycles()
-        
+
         return ApiResponse(
             success=True,
             message="Watering cycle added successfully",
@@ -684,37 +715,29 @@ async def add_watering_cycle(cycle: WateringCycleRequest):
                     "scheduled_time": db_cycle.scheduled_time.isoformat(),
                     "duration": db_cycle.duration,
                     "description": db_cycle.description,
-                    "status": db_cycle.status
-                },
-                "total_cycles": len(watering_cycles)
+                    "status": db_cycle.status,
+                    "plan_id": db_cycle.plan_id,
+                }
             }
         )
-        
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error adding watering cycle: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to add cycle: {str(e)}")
+
 
 @app.put("/api/watering/cycle/{cycle_id}", response_model=ApiResponse, tags=["Watering Cycle"])
 async def update_watering_cycle(cycle_id: str, cycle: WateringCycleRequest):
     """Update an existing watering cycle (only if still pending)"""
     try:
-        # Find the cycle
-        cycle_entry = None
-        for c in watering_cycles:
-            if c.id == cycle_id:
-                cycle_entry = c
-                break
-        
-        if not cycle_entry:
+        db_existing_cycle = WateringCycleService.get_cycle(cycle_id)
+        if not db_existing_cycle:
             raise HTTPException(status_code=404, detail="Cycle not found")
-        
-        if cycle_entry.status != "pending":
-            raise HTTPException(
-                status_code=400, 
-                detail="Can only update pending cycles"
-            )
-        
-        # Parse the scheduled time
+
+        if db_existing_cycle.status != "pending":
+            raise HTTPException(status_code=400, detail="Can only update pending cycles")
+
         try:
             scheduled_datetime = datetime.fromisoformat(cycle.scheduled_time.replace('Z', '+00:00'))
         except ValueError:
@@ -722,55 +745,219 @@ async def update_watering_cycle(cycle_id: str, cycle: WateringCycleRequest):
                 status_code=400,
                 detail="Invalid datetime format. Use ISO format (e.g., '2023-12-25T10:30:00')"
             )
-        
-        # Validate new schedule time
+
         if scheduled_datetime <= datetime.now():
-            raise HTTPException(
-                status_code=400,
-                detail="Scheduled time must be in the future"
-            )
-        
-        # Update cycle
-        cycle_entry.scheduled_time = scheduled_datetime
-        cycle_entry.duration = cycle.duration
-        cycle_entry.description = cycle.description or cycle_entry.description
-        
-        save_watering_cycles()
-        
+            raise HTTPException(status_code=400, detail="Scheduled time must be in the future")
+
+        if cycle.plan_id:
+            existing_plan = WateringPlanService.get_plan(cycle.plan_id)
+            if not existing_plan:
+                raise HTTPException(status_code=404, detail="Plan not found")
+
+        updated_cycle = WateringCycleService.update_cycle(
+            cycle_id=cycle_id,
+            scheduled_time=scheduled_datetime,
+            duration=cycle.duration,
+            description=cycle.description,
+            plan_id=cycle.plan_id,
+        )
+        if not updated_cycle:
+            raise HTTPException(status_code=404, detail="Cycle not found")
+
+        load_watering_cycles()
+
         return ApiResponse(
             success=True,
             message="Watering cycle updated successfully",
-            data={"cycle": cycle_entry.dict()}
+            data={"cycle": {
+                "id": updated_cycle.id,
+                "scheduled_time": updated_cycle.scheduled_time.isoformat(),
+                "duration": updated_cycle.duration,
+                "description": updated_cycle.description,
+                "status": updated_cycle.status,
+                "plan_id": updated_cycle.plan_id,
+            }}
         )
-        
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error updating watering cycle: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to update cycle: {str(e)}")
+
 
 @app.delete("/api/watering/cycle/{cycle_id}", response_model=ApiResponse, tags=["Watering Cycle"])
 async def delete_watering_cycle(cycle_id: str):
     """Delete/cancel a watering cycle"""
     try:
-        global watering_cycles
-        
-        # Find and remove the cycle
-        original_count = len(watering_cycles)
-        watering_cycles = [c for c in watering_cycles if c.id != cycle_id]
-        
-        if len(watering_cycles) == original_count:
+        deleted = WateringCycleService.delete_cycle(cycle_id)
+        if not deleted:
             raise HTTPException(status_code=404, detail="Cycle not found")
-        
-        save_watering_cycles()
-        
+
+        load_watering_cycles()
+
         return ApiResponse(
             success=True,
             message="Watering cycle deleted successfully",
             data={"remaining_cycles": len(watering_cycles)}
         )
-        
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error deleting watering cycle: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to delete cycle: {str(e)}")
+
+
+# Watering Plan API Endpoints
+@app.get("/api/watering/plan", response_model=ApiResponse, tags=["Watering Plan"])
+async def get_watering_plans():
+    """Get watering plans (containers for planned cycles)."""
+    try:
+        plans = WateringPlanService.get_all_plans()
+        plans_data = []
+        for plan in plans:
+            cycles = WateringPlanService.get_plan_cycles(plan.id)
+            plan_dict = plan.to_dict()
+            plan_dict["cycle_count"] = len(cycles)
+            plan_dict["cycles"] = [c.to_dict() for c in cycles]
+            plans_data.append(plan_dict)
+
+        return ApiResponse(
+            success=True,
+            message=f"Retrieved {len(plans_data)} watering plans",
+            data={"plans": plans_data, "total_count": len(plans_data)}
+        )
+    except Exception as e:
+        logger.error(f"Error getting watering plans: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get plans: {str(e)}")
+
+
+@app.get("/api/watering/plan/{plan_id}", response_model=ApiResponse, tags=["Watering Plan"])
+async def get_watering_plan(plan_id: str):
+    """Get one watering plan and its cycles."""
+    try:
+        plan = WateringPlanService.get_plan(plan_id)
+        if not plan:
+            raise HTTPException(status_code=404, detail="Plan not found")
+
+        cycles = WateringPlanService.get_plan_cycles(plan_id)
+        plan_dict = plan.to_dict()
+        plan_dict["cycle_count"] = len(cycles)
+        plan_dict["cycles"] = [c.to_dict() for c in cycles]
+
+        return ApiResponse(success=True, message="Retrieved watering plan", data={"plan": plan_dict})
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting watering plan: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get plan: {str(e)}")
+
+
+@app.post("/api/watering/plan", response_model=ApiResponse, tags=["Watering Plan"])
+async def create_watering_plan(plan: WateringPlanRequest):
+    """Create a watering plan container. It can start with zero cycles."""
+    try:
+        if plan.start_date and plan.end_date and plan.end_date < plan.start_date:
+            raise HTTPException(status_code=400, detail="end_date must be after or equal to start_date")
+
+        db_plan = WateringPlanService.create_plan(
+            name=plan.name,
+            description=plan.description,
+            start_date=plan.start_date,
+            end_date=plan.end_date,
+            active=plan.active,
+        )
+
+        return ApiResponse(success=True, message="Watering plan created successfully", data={"plan": db_plan.to_dict()})
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating watering plan: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create plan: {str(e)}")
+
+
+@app.put("/api/watering/plan/{plan_id}", response_model=ApiResponse, tags=["Watering Plan"])
+async def update_watering_plan(plan_id: str, plan: WateringPlanUpdateRequest):
+    """Update watering plan metadata."""
+    try:
+        if plan.start_date and plan.end_date and plan.end_date < plan.start_date:
+            raise HTTPException(status_code=400, detail="end_date must be after or equal to start_date")
+
+        updated = WateringPlanService.update_plan(
+            plan_id=plan_id,
+            name=plan.name,
+            description=plan.description,
+            start_date=plan.start_date,
+            end_date=plan.end_date,
+            active=plan.active,
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail="Plan not found")
+
+        return ApiResponse(success=True, message="Watering plan updated successfully", data={"plan": updated.to_dict()})
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating watering plan: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update plan: {str(e)}")
+
+
+@app.delete("/api/watering/plan/{plan_id}", response_model=ApiResponse, tags=["Watering Plan"])
+async def delete_watering_plan(plan_id: str):
+    """Delete a watering plan. Cycles stay and become unassigned."""
+    try:
+        deleted = WateringPlanService.delete_plan(plan_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Plan not found")
+
+        return ApiResponse(success=True, message="Watering plan deleted successfully", data={"deleted_plan_id": plan_id})
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting watering plan: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete plan: {str(e)}")
+
+
+@app.post("/api/watering/plan/{plan_id}/cycle/{cycle_id}", response_model=ApiResponse, tags=["Watering Plan"])
+async def add_cycle_to_plan(plan_id: str, cycle_id: str):
+    """Assign an existing cycle to a watering plan."""
+    try:
+        updated = WateringCycleService.assign_cycle_to_plan(cycle_id=cycle_id, plan_id=plan_id)
+        if not updated:
+            raise HTTPException(status_code=404, detail="Plan or cycle not found")
+
+        return ApiResponse(
+            success=True,
+            message="Cycle added to watering plan",
+            data={"cycle_id": updated.id, "plan_id": updated.plan_id}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding cycle to plan: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to add cycle to plan: {str(e)}")
+
+
+@app.delete("/api/watering/plan/{plan_id}/cycle/{cycle_id}", response_model=ApiResponse, tags=["Watering Plan"])
+async def remove_cycle_from_plan(plan_id: str, cycle_id: str):
+    """Remove cycle from a watering plan. Cycle remains unassigned."""
+    try:
+        cycle = WateringCycleService.get_cycle(cycle_id)
+        if not cycle:
+            raise HTTPException(status_code=404, detail="Cycle not found")
+        if cycle.plan_id != plan_id:
+            raise HTTPException(status_code=400, detail="Cycle is not assigned to this plan")
+
+        updated = WateringCycleService.unassign_cycle_from_plan(cycle_id)
+        return ApiResponse(
+            success=True,
+            message="Cycle removed from watering plan",
+            data={"cycle_id": updated.id, "plan_id": updated.plan_id}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error removing cycle from plan: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to remove cycle from plan: {str(e)}")
 
 # =================== PLANT MANAGEMENT API ENDPOINTS ===================
 

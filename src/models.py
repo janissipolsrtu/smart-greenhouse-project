@@ -1,9 +1,38 @@
 """Database models for irrigation system"""
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Date, Float
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Date, Float, ForeignKey
 from sqlalchemy.sql import func
 from datetime import datetime, date
 from database import Base
 import uuid
+
+
+class WateringPlan(Base):
+    """Database model for watering plans (container for zero or many cycles)"""
+    __tablename__ = "watering_plans"
+
+    id = Column(String, primary_key=True, default=lambda: f"plan_{int(datetime.utcnow().timestamp())}_{uuid.uuid4().hex[:8]}")
+    name = Column(String(120), nullable=False, index=True)
+    description = Column(Text, nullable=True)
+    start_date = Column(Date, nullable=True)
+    end_date = Column(Date, nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    active = Column(Boolean, default=True, nullable=False, index=True)
+
+    def __repr__(self):
+        return f"<WateringPlan(id='{self.id}', name='{self.name}', active='{self.active}')>"
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "start_date": self.start_date.isoformat() if self.start_date else None,
+            "end_date": self.end_date.isoformat() if self.end_date else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "active": self.active,
+        }
 
 class WateringCycle(Base):
     """Database model for watering cycles"""
@@ -19,6 +48,7 @@ class WateringCycle(Base):
     status = Column(String, default="pending", nullable=False, index=True)  # pending, executing, completed, failed, cancelled
     executed_at = Column(DateTime, nullable=True)  # Naive UTC datetime
     result = Column(Text, nullable=True)
+    plan_id = Column(String, ForeignKey("watering_plans.id", ondelete="SET NULL"), nullable=True, index=True)
     
     def __repr__(self):
         return f"<WateringCycle(id='{self.id}', scheduled_time='{self.scheduled_time}', status='{self.status}')>"
@@ -35,7 +65,8 @@ class WateringCycle(Base):
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "status": self.status,
             "executed_at": self.executed_at.isoformat() if self.executed_at else None,
-            "result": self.result
+            "result": self.result,
+            "plan_id": self.plan_id,
         }
 
 
