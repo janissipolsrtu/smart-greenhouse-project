@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+
+{% block title %}Auga detaļas - Gudrā siltumnīca{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0"><i class="fas fa-seedling me-2"></i>{{ plant.name }}</h1>
+    <div class="d-flex gap-2">
+        <a href="{% url 'irrigation:plant_list' %}" class="btn btn-outline-secondary">Atpakaļ</a>
+        {% if can_edit %}
+        <a href="{% url 'irrigation:edit_plant' plant.id %}" class="btn btn-primary">Rediģēt</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-6"><strong>Šķirne:</strong> {{ plant.variety|default:'-' }}</div>
+            <div class="col-md-6"><strong>Pozīcija:</strong> {{ plant.location_coordinate }}</div>
+            <div class="col-md-6"><strong>Stādīšanas datums:</strong> {{ plant.planting_date }}</div>
+            <div class="col-md-6"><strong>Dienas kopš stādīšanas:</strong> {{ plant.days_since_planting }}</div>
+            <div class="col-md-6"><strong>Laistīšanas biežums:</strong> {{ plant.watering_frequency }}</div>
+            <div class="col-md-6"><strong>Laistīšanas ilgums (sek):</strong> {{ plant.watering_duration }}</div>
+            <div class="col-md-6"><strong>Ūdens daudzums (ml):</strong> {{ plant.water_amount_ml|default:'-' }}</div>
+            <div class="col-md-6"><strong>Ražas datums:</strong> {{ plant.harvest_date_estimate|default:'-' }}</div>
+            <div class="col-md-6"><strong>Ražas daudzums (kg):</strong> {{ plant.harvest_quantity_estimate|default:'-' }}</div>
+            <div class="col-md-6"><strong>Atrašanās apraksts:</strong> {{ plant.location_description|default:'-' }}</div>
+            <div class="col-12"><strong>Piezīmes:</strong><br>{{ plant.notes|default:'-' }}</div>
+        </div>
+    </div>
+</div>
+
+{% if can_edit %}
+<div class="mt-3">
+    <a href="{% url 'irrigation:deactivate_plant' plant.id %}" class="btn btn-outline-danger">Deaktivizēt</a>
+</div>
+{% endif %}
+{% endblock %}

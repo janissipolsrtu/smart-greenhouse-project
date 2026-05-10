@@ -631,7 +631,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (type === 'plant') {
             // For plants, redirect to deactivate view
-            window.location.href = `/irrigation/plants/${itemId}/deactivate/`;
+            window.location.href = `{% url 'irrigation:deactivate_plant' 'PLANT_ID_PLACEHOLDER' %}`.replace('PLANT_ID_PLACEHOLDER', itemId);
         } else {
             // For paths, use DELETE API
             fetch('{% url "irrigation:paths_api" %}', {

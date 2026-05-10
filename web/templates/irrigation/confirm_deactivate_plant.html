@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+
+{% block title %}Deaktivizēt Augu - Gudrā siltumnīca{% endblock %}
+
+{% block content %}
+<div class="card border-danger">
+    <div class="card-header bg-danger text-white">
+        <strong>Apstiprināt deaktivizēšanu</strong>
+    </div>
+    <div class="card-body">
+        <p>Vai tiešām vēlaties deaktivizēt augu <strong>{{ plant.name }}</strong> ({{ plant.location_coordinate }})?</p>
+        <p class="text-muted mb-0">Augs netiks dzēsts no datubāzes, tikai atzīmēts kā neaktīvs.</p>
+    </div>
+    <div class="card-footer d-flex gap-2">
+        <form method="post">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">Deaktivizēt</button>
+        </form>
+        <a class="btn btn-outline-secondary" href="{% url 'irrigation:plant_detail' plant.id %}">Atcelt</a>
+    </div>
+</div>
+{% endblock %}

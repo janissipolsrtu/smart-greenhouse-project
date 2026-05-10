@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+
+{% block title %}Rediģēt Augu - Gudrā siltumnīca{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-3"><i class="fas fa-edit me-2"></i>Rediģēt augu: {{ plant.name }}</h1>
+
+<form method="post" class="card">
+    {% csrf_token %}
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label">Nosaukums *</label>
+                <input class="form-control" type="text" name="name" value="{{ plant.name }}" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Šķirne</label>
+                <input class="form-control" type="text" name="variety" value="{{ plant.variety|default:'' }}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Stādīšanas datums *</label>
+                <input class="form-control" type="date" name="planting_date" value="{{ plant.planting_date|date:'Y-m-d' }}" required>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Rinda *</label>
+                <input class="form-control" type="number" name="location_row" min="1" value="{{ plant.location_row }}" required>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Kolonna *</label>
+                <input class="form-control" type="number" name="location_column" min="1" value="{{ plant.location_column }}" required>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Laistīšanas biežums</label>
+                <input class="form-control" type="number" name="watering_frequency" value="{{ plant.watering_frequency }}" min="1">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Laistīšanas ilgums (sek)</label>
+                <input class="form-control" type="number" name="watering_duration" value="{{ plant.watering_duration }}" min="1">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Ūdens daudzums (ml)</label>
+                <input class="form-control" type="number" name="water_amount_ml" value="{{ plant.water_amount_ml|default:'' }}" min="1">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Ražas datuma prognoze</label>
+                <input class="form-control" type="date" name="harvest_date_estimate" value="{{ plant.harvest_date_estimate|date:'Y-m-d' }}">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Ražas daudzuma prognoze (kg)</label>
+                <input class="form-control" type="number" step="0.01" name="harvest_quantity_estimate" value="{{ plant.harvest_quantity_estimate|default:'' }}" min="0">
+            </div>
+            <div class="col-12">
+                <label class="form-label">Atrašanās apraksts</label>
+                <input class="form-control" type="text" name="location_description" value="{{ plant.location_description|default:'' }}">
+            </div>
+            <div class="col-12">
+                <label class="form-label">Piezīmes</label>
+                <textarea class="form-control" name="notes" rows="3">{{ plant.notes|default:'' }}</textarea>
+            </div>
+        </div>
+    </div>
+    <div class="card-footer d-flex gap-2">
+        <button class="btn btn-primary" type="submit">Saglabāt izmaiņas</button>
+        <a class="btn btn-outline-secondary" href="{% url 'irrigation:plant_detail' plant.id %}">Atcelt</a>
+    </div>
+</form>
+{% endblock %}
