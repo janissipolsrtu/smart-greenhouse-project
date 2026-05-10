@@ -161,7 +161,10 @@
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="fas fa-calendar-alt me-2"></i>Gaidāmie plāni (Nākošās 24h)
+                    <a href="{% url 'irrigation:plan_list' %}" class="text-decoration-none text-dark">
+                        <i class="fas fa-calendar-alt me-2"></i>Gaidāmie plāni (Nākošās 24h)
+                        <i class="fas fa-external-link-alt ms-1 small text-muted"></i>
+                    </a>
                 </h5>
             </div>
             <div class="card-body">
@@ -228,7 +231,10 @@
         <div class="card mt-4 dashboard-layout-grid">
             <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="fas fa-th-large me-2"></i>Siltumnīcas izkārtojums
+                    <a href="{% url 'irrigation:greenhouse_layout' %}" class="text-decoration-none text-dark">
+                        <i class="fas fa-th-large me-2"></i>Siltumnīcas izkārtojums
+                        <i class="fas fa-external-link-alt ms-1 small text-muted"></i>
+                    </a>
                 </h5>
             </div>
             <div class="card-body">
