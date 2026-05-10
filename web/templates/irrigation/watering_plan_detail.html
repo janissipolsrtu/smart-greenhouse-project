@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+
+{% block title %}Plāns {{ plan.name }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="h2 mb-0"><i class="fas fa-layer-group me-2"></i>{{ plan.name }}</h1>
+        <p class="text-muted">{{ plan.id }}</p>
+    </div>
+    <div class="col-auto d-flex gap-2">
+        <a href="{% url 'irrigation:create_cycle' %}?plan_id={{ plan.id }}" class="btn btn-primary"><i class="fas fa-plus me-1"></i>Jauns cikls šim plānam</a>
+        <a href="{% url 'irrigation:plan_list' %}" class="btn btn-outline-secondary">Atpakaļ</a>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header"><strong>Piesaistītie cikli</strong></div>
+            <div class="card-body">
+                {% if assigned_cycles %}
+                <table class="table table-sm">
+                    <thead><tr><th>ID</th><th>Laiks</th><th>Ilgums</th><th>Statuss</th><th></th></tr></thead>
+                    <tbody>
+                    {% for cycle in assigned_cycles %}
+                        <tr>
+                            <td><code>{{ cycle.id }}</code></td>
+                            <td>{{ cycle.scheduled_time|date:"Y-m-d H:i" }}</td>
+                            <td>{{ cycle.duration }}s</td>
+                            <td>{{ cycle.get_status_display }}</td>
+                            <td>
+                                <form method="post" action="{% url 'irrigation:unassign_cycle_from_plan' plan.id cycle.id %}">
+                                    {% csrf_token %}
+                                    <button class="btn btn-sm btn-outline-warning" type="submit">Noņemt</button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-muted mb-0">Plānā pagaidām nav ciklu.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header"><strong>Nepiesaistītie cikli</strong></div>
+            <div class="card-body">
+                {% if unassigned_cycles %}
+                <div class="list-group list-group-flush">
+                    {% for cycle in unassigned_cycles %}
+                        <div class="list-group-item d-flex justify-content-between align-items-start">
+                            <div>
+                                <div><code>{{ cycle.id|truncatechars:28 }}</code></div>
+                                <small class="text-muted">{{ cycle.scheduled_time|date:"Y-m-d H:i" }} | {{ cycle.duration }}s</small>
+                            </div>
+                            <form method="post" action="{% url 'irrigation:assign_cycle_to_plan' plan.id cycle.id %}">
+                                {% csrf_token %}
+                                <button class="btn btn-sm btn-outline-primary" type="submit">Pievienot</button>
+                            </form>
+                        </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">Nav pieejamu nepiesaistītu ciklu.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

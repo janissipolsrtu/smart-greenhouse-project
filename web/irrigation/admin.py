@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import WateringCycle, SensorData, Plant, PathCell
+from .models import WateringPlan, WateringCycle, SensorData, Plant, PathCell
 
 
 @admin.register(SensorData)
@@ -17,11 +17,25 @@ class SensorDataAdmin(admin.ModelAdmin):
         return self.readonly_fields
 
 
+@admin.register(WateringPlan)
+class WateringPlanAdmin(admin.ModelAdmin):
+    list_display = ['id', 'name', 'active', 'start_date', 'end_date', 'created_at']
+    list_filter = ['active', 'start_date', 'end_date', 'created_at']
+    search_fields = ['id', 'name', 'description']
+    readonly_fields = ['created_at', 'updated_at']
+    ordering = ['-created_at']
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj:
+            return self.readonly_fields + ['id']
+        return self.readonly_fields
+
+
 @admin.register(WateringCycle)
 class WateringCycleAdmin(admin.ModelAdmin):
-    list_display = ['id', 'scheduled_time', 'duration', 'status', 'executed_at']
-    list_filter = ['status', 'scheduled_time']
-    search_fields = ['id']
+    list_display = ['id', 'plan', 'scheduled_time', 'duration', 'status', 'executed_at']
+    list_filter = ['status', 'scheduled_time', 'plan']
+    search_fields = ['id', 'plan__id', 'plan__name']
     readonly_fields = ['executed_at', 'created_at']
     ordering = ['-scheduled_time']
     

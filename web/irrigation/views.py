@@ -6,17 +6,17 @@ from django.http import JsonResponse
 from django.db.models import Avg, Max, Min, Count, Q
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from .models import WateringCycle, SensorData, Plant, PathCell
+from .models import WateringPlan, WateringCycle, SensorData, Plant, PathCell
 import uuid
 import time
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 class WateringCycleListView(ListView):
     model = WateringCycle
     template_name = 'irrigation/plan_list.html'
-    context_object_name = 'cycles'
+    context_object_name = 'plans'
     paginate_by = 10
     
     def get_queryset(self):
@@ -32,6 +32,7 @@ def dashboard_view(request):
     pending_cycles = WateringCycle.objects.filter(status='pending').count()
     completed_cycles = WateringCycle.objects.filter(status='completed').count()
     failed_cycles = WateringCycle.objects.filter(status='failed').count()
+    total_plan_containers = WateringPlan.objects.count()
     
     # Get upcoming cycles (next 24 hours)
     upcoming_cycles = WateringCycle.objects.filter(
@@ -53,12 +54,19 @@ def dashboard_view(request):
     
     context = {
         'total_cycles': total_cycles,
+        'total_plans': total_cycles,
         'pending_cycles': pending_cycles,
+        'pending_plans': pending_cycles,
         'completed_cycles': completed_cycles, 
+        'completed_plans': completed_cycles,
         'failed_cycles': failed_cycles,
+        'failed_plans': failed_cycles,
         'overdue_cycles': overdue_cycles,
+        'overdue_plans': overdue_cycles,
         'upcoming_cycles': upcoming_cycles,
+        'upcoming_plans': upcoming_cycles,
         'recent_completed': recent_completed,
+        'total_plan_containers': total_plan_containers,
     }
     
     return render(request, 'irrigation/dashboard.html', context)
@@ -72,6 +80,7 @@ def create_cycle_view(request):
             duration = int(request.POST.get('duration'))
             device = request.POST.get('device', '0x540f57fffe890af8')
             description = request.POST.get('description', '')
+            plan_id = request.POST.get('plan_id') or None
             
             # Parse the datetime
             scheduled_datetime = timezone.datetime.fromisoformat(scheduled_time.replace('Z', '+00:00'))
@@ -83,12 +92,17 @@ def create_cycle_view(request):
             unique_id = str(uuid.uuid4())[:8]
             cycle_id = f"cycle_{timestamp}_{unique_id}"
             
+            plan = None
+            if plan_id:
+                plan = WateringPlan.objects.filter(id=plan_id).first()
+
             # Create the cycle
             cycle = WateringCycle.objects.create(
                 id=cycle_id,
                 scheduled_time=scheduled_datetime,
                 duration=duration,
                 device=device,
+                plan=plan,
                 description=description,
                 status='pending'
             )
@@ -98,14 +112,19 @@ def create_cycle_view(request):
             
         except Exception as e:
             messages.error(request, f'Kļūda izveidojot ciklu: {str(e)}')
-    
-    return render(request, 'irrigation/create_plan.html')
+
+    plans = WateringPlan.objects.filter(active=True).order_by('-created_at')
+    selected_plan_id = request.GET.get('plan_id', '')
+    return render(request, 'irrigation/create_plan.html', {
+        'plans': plans,
+        'selected_plan_id': selected_plan_id,
+    })
 
 
 def cycle_detail_view(request, cycle_id):
     """View details of a specific watering cycle"""
     cycle = get_object_or_404(WateringCycle, id=cycle_id)
-    return render(request, 'irrigation/plan_detail.html', {'cycle': cycle})
+    return render(request, 'irrigation/plan_detail.html', {'cycle': cycle, 'plan': cycle})
 
 
 def delete_cycle_view(request, cycle_id):
@@ -117,7 +136,193 @@ def delete_cycle_view(request, cycle_id):
         messages.success(request, f'Cikls {cycle_id} veiksmīgi dzēsts!')
         return redirect('irrigation:dashboard')
     
-    return render(request, 'irrigation/confirm_delete.html', {'cycle': cycle})
+    return render(request, 'irrigation/confirm_delete.html', {'cycle': cycle, 'plan': cycle})
+
+
+class WateringPlanListView(ListView):
+    model = WateringPlan
+    template_name = 'irrigation/watering_plan_list.html'
+    context_object_name = 'plans'
+    paginate_by = 10
+
+    def get_queryset(self):
+        return WateringPlan.objects.all().order_by('-created_at')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['upcoming_cycles'] = WateringCycle.objects.filter(
+            scheduled_time__gte=timezone.now(),
+            status='pending'
+        ).select_related('plan').order_by('scheduled_time')[:10]
+        return context
+
+
+def create_plan_view(request):
+    """Create a new watering plan (container for cycles)."""
+    if request.method == 'POST':
+        try:
+            name = request.POST.get('name', '').strip()
+            description = request.POST.get('description', '').strip() or None
+            start_date_raw = request.POST.get('start_date') or None
+            end_date_raw = request.POST.get('end_date') or None
+            active = request.POST.get('active') == 'on'
+
+            auto_create_cycles = request.POST.get('auto_create_cycles') == 'on'
+            schedule_type = request.POST.get('schedule_type', 'daily')
+            interval_days = int(request.POST.get('interval_days', 1) or 1)
+            weekly_day = int(request.POST.get('weekly_day', 0) or 0)
+            cycle_description = request.POST.get('cycle_description', '').strip() or None
+            cycle_device = request.POST.get('device', '0x540f57fffe890af8')
+
+            # Parse multiple cycle times and durations
+            cycle_times_raw = request.POST.getlist('cycle_times')
+            cycle_durations_raw = request.POST.getlist('cycle_durations')
+
+            start_date = datetime.fromisoformat(start_date_raw).date() if start_date_raw else None
+            end_date = datetime.fromisoformat(end_date_raw).date() if end_date_raw else None
+
+            if not name:
+                raise ValueError('Plāna nosaukums ir obligāts')
+
+            if start_date and end_date and end_date < start_date:
+                raise ValueError('Beigu datumam jābūt pēc sākuma datuma')
+
+            if auto_create_cycles:
+                if not start_date or not end_date:
+                    raise ValueError('Lai automātiski izveidotu ciklus, jānorāda sākuma un beigu datums')
+                if schedule_type not in ['daily', 'interval', 'weekly']:
+                    raise ValueError('Nederīgs atkārtošanās tips')
+                if interval_days < 1 or interval_days > 7:
+                    raise ValueError('Intervālam jābūt no 1 līdz 7 dienām')
+                if weekly_day < 0 or weekly_day > 6:
+                    raise ValueError('Nederīga nedēļas diena')
+                if not cycle_times_raw:
+                    raise ValueError('Jānorāda vismaz viena laistīšanas reice')
+
+            # Parse and validate cycle times/durations
+            cycle_schedule = []
+            if auto_create_cycles and cycle_times_raw:
+                for time_str, duration_str in zip(cycle_times_raw, cycle_durations_raw):
+                    try:
+                        cycle_time = datetime.strptime(time_str, '%H:%M').time()
+                        cycle_duration = int(duration_str)
+                        if cycle_duration < 1 or cycle_duration > 3600:
+                            raise ValueError(f'Cikla ilgumam {time_str} jābūt no 1 līdz 3600 sekundēm')
+                        cycle_schedule.append((cycle_time, cycle_duration))
+                    except (ValueError, IndexError) as e:
+                        raise ValueError(f'Kļūda laistīšanas reices {time_str} apstrādē: {str(e)}')
+
+            timestamp = int(time.time())
+            unique_id = str(uuid.uuid4())[:8]
+            plan_id = f"plan_{timestamp}_{unique_id}"
+
+            plan = WateringPlan.objects.create(
+                id=plan_id,
+                name=name,
+                description=description,
+                start_date=start_date,
+                end_date=end_date,
+                active=active,
+            )
+
+            created_cycles = 0
+            if auto_create_cycles:
+                current_date = start_date
+                max_cycles = 500
+
+                while current_date <= end_date and created_cycles < max_cycles:
+                    should_create = False
+
+                    if schedule_type == 'daily':
+                        should_create = True
+                    elif schedule_type == 'interval':
+                        day_diff = (current_date - start_date).days
+                        should_create = (day_diff % interval_days) == 0
+                    elif schedule_type == 'weekly':
+                        should_create = current_date.weekday() == weekly_day
+
+                    if should_create:
+                        # Create a cycle for each scheduled time
+                        for cycle_time, cycle_duration in cycle_schedule:
+                            cycle_timestamp = int(time.time())
+                            cycle_unique_id = str(uuid.uuid4())[:8]
+                            cycle_id = f"cycle_{cycle_timestamp}_{cycle_unique_id}"
+
+                            scheduled_dt = datetime.combine(current_date, cycle_time)
+                            WateringCycle.objects.create(
+                                id=cycle_id,
+                                plan=plan,
+                                scheduled_time=scheduled_dt,
+                                duration=cycle_duration,
+                                device=cycle_device,
+                                description=cycle_description,
+                                status='pending'
+                            )
+                            created_cycles += 1
+
+                    current_date += timedelta(days=1)
+
+            if auto_create_cycles:
+                messages.success(request, f'Laistīšanas plāns {plan_id} veiksmīgi izveidots ar {created_cycles} cikliem!')
+            else:
+                messages.success(request, f'Laistīšanas plāns {plan_id} veiksmīgi izveidots!')
+            return redirect('irrigation:plan_list')
+        except Exception as e:
+            messages.error(request, f'Kļūda izveidojot plānu: {str(e)}')
+
+    return render(request, 'irrigation/create_watering_plan.html')
+
+
+def plan_detail_view(request, plan_id):
+    """View watering plan details and assigned cycles."""
+    plan = get_object_or_404(WateringPlan, id=plan_id)
+    assigned_cycles = plan.cycles.all().order_by('-scheduled_time')
+    unassigned_cycles = WateringCycle.objects.filter(plan__isnull=True, status='pending').order_by('scheduled_time')[:50]
+
+    return render(request, 'irrigation/watering_plan_detail.html', {
+        'plan': plan,
+        'assigned_cycles': assigned_cycles,
+        'unassigned_cycles': unassigned_cycles,
+    })
+
+
+def delete_plan_view(request, plan_id):
+    """Delete watering plan and unassign related cycles."""
+    plan = get_object_or_404(WateringPlan, id=plan_id)
+
+    if request.method == 'POST':
+        WateringCycle.objects.filter(plan=plan).update(plan=None)
+        plan.delete()
+        messages.success(request, f'Plāns {plan_id} veiksmīgi dzēsts!')
+        return redirect('irrigation:plan_list')
+
+    return render(request, 'irrigation/confirm_delete_plan.html', {'plan': plan})
+
+
+def assign_cycle_to_plan_view(request, plan_id, cycle_id):
+    """Assign existing cycle to plan."""
+    plan = get_object_or_404(WateringPlan, id=plan_id)
+    cycle = get_object_or_404(WateringCycle, id=cycle_id)
+
+    if request.method == 'POST':
+        cycle.plan = plan
+        cycle.save(update_fields=['plan', 'updated_at'])
+        messages.success(request, f'Cikls {cycle.id} pievienots plānam {plan.name}.')
+
+    return redirect('irrigation:plan_detail', plan_id=plan.id)
+
+
+def unassign_cycle_from_plan_view(request, plan_id, cycle_id):
+    """Remove cycle from plan (cycle remains existing)."""
+    plan = get_object_or_404(WateringPlan, id=plan_id)
+    cycle = get_object_or_404(WateringCycle, id=cycle_id, plan=plan)
+
+    if request.method == 'POST':
+        cycle.plan = None
+        cycle.save(update_fields=['plan', 'updated_at'])
+        messages.success(request, f'Cikls {cycle.id} noņemts no plāna {plan.name}.')
+
+    return redirect('irrigation:plan_detail', plan_id=plan.id)
 
 
 def system_status_view(request):

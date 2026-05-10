@@ -5,10 +5,17 @@ app_name = 'irrigation'
 
 urlpatterns = [
     path('', views.dashboard_view, name='dashboard'),
-    path('cycles/', views.WateringCycleListView.as_view(), name='cycle_list'),
-    path('cycles/create/', views.create_cycle_view, name='create_cycle'),
-    path('cycles/<str:cycle_id>/', views.cycle_detail_view, name='cycle_detail'),
-    path('cycles/<str:cycle_id>/delete/', views.delete_cycle_view, name='delete_cycle'),
+    path('watering/plans/', views.WateringPlanListView.as_view(), name='plan_list'),
+    path('watering/plans/create/', views.create_plan_view, name='create_plan'),
+    path('watering/plans/<str:plan_id>/', views.plan_detail_view, name='plan_detail'),
+    path('watering/plans/<str:plan_id>/delete/', views.delete_plan_view, name='delete_plan'),
+    path('watering/plans/<str:plan_id>/assign-cycle/<str:cycle_id>/', views.assign_cycle_to_plan_view, name='assign_cycle_to_plan'),
+    path('watering/plans/<str:plan_id>/unassign-cycle/<str:cycle_id>/', views.unassign_cycle_from_plan_view, name='unassign_cycle_from_plan'),
+
+    path('watering/cycles/', views.WateringCycleListView.as_view(), name='cycle_list'),
+    path('watering/cycles/create/', views.create_cycle_view, name='create_cycle'),
+    path('watering/cycles/<str:cycle_id>/', views.cycle_detail_view, name='cycle_detail'),
+    path('watering/cycles/<str:cycle_id>/delete/', views.delete_cycle_view, name='delete_cycle'),
     path('status/', views.system_status_view, name='system_status'),
     
     # Temperature Dashboard URLs
@@ -22,7 +29,7 @@ urlpatterns = [
     path('plants/<str:plant_id>/', views.plant_detail_view, name='plant_detail'),
     path('plants/<str:plant_id>/edit/', views.edit_plant_view, name='edit_plant'),
     path('plants/<str:plant_id>/deactivate/', views.deactivate_plant_view, name='deactivate_plant'),
-    path('greenhouse/layout/', views.greenhouse_layout_view, name='greenhouse_layout'),
+    path('layout/', views.greenhouse_layout_view, name='greenhouse_layout'),
     path('plants/harvest-ready/', views.plants_ready_for_harvest_view, name='harvest_ready'),
     
     # API endpoints

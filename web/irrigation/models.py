@@ -47,6 +47,30 @@ class SensorData(models.Model):
         return ""
 
 
+class WateringPlan(models.Model):
+    """Container for planned watering cycles (none or many cycles)."""
+
+    id = models.CharField(max_length=100, primary_key=True)
+    name = models.CharField(max_length=120)
+    description = models.TextField(blank=True, null=True)
+    start_date = models.DateField(blank=True, null=True)
+    end_date = models.DateField(blank=True, null=True)
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'watering_plans'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.name} ({self.id})"
+
+    @property
+    def cycle_count(self):
+        return self.cycles.count()
+
+
 class WateringCycle(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Pending'),
@@ -64,6 +88,14 @@ class WateringCycle(models.Model):
     scheduled_time = models.DateTimeField()
     duration = models.IntegerField(help_text="Duration in seconds")
     description = models.TextField(blank=True, null=True, help_text="Optional description")
+    plan = models.ForeignKey(
+        WateringPlan,
+        on_delete=models.SET_NULL,
+        related_name='cycles',
+        null=True,
+        blank=True,
+        help_text="Optional watering plan container"
+    )
     device = models.CharField(max_length=50, choices=DEVICE_CHOICES, default='0x540f57fffe890af8')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     executed_at = models.DateTimeField(null=True, blank=True)

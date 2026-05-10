@@ -1,18 +1,18 @@
 {% extends 'base.html' %}
 
-{% block title %}Visi plāni - Gudrā siltumnīca{% endblock %}
+{% block title %}Visas laistīšanas reizes - Gudrā siltumnīca{% endblock %}
 
 {% block content %}
 <div class="row mb-4">
     <div class="col">
         <h1 class="h2 mb-0">
-            <i class="fas fa-list me-2"></i>Visi laistīšanas plāni
+            <i class="fas fa-list me-2"></i>Visas laistīšanas reizes
         </h1>
         <p class="text-muted">Pārvaldīt visus jūsu laistīšanas plānus</p>
     </div>
     <div class="col-auto">
-        <a href="{% url 'irrigation:create_plan' %}" class="btn btn-primary">
-            <i class="fas fa-plus me-2"></i>Izveidot jaunu plānu
+        <a href="{% url 'irrigation:create_cycle' %}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Pievienot laistīšanas reizi
         </a>
     </div>
 </div>
@@ -123,8 +123,8 @@
         <i class="fas fa-seedling fa-4x text-muted mb-4"></i>
         <h4>No Irrigation Plans Found</h4>
         <p class="text-muted mb-4">You haven't created any irrigation plans yet.</p>
-        <a href="{% url 'irrigation:create_plan' %}" class="btn btn-primary">
-            <i class="fas fa-plus me-2"></i>Create Your First Plan
+        <a href="{% url 'irrigation:create_cycle' %}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Pievienot pirmo laistīšanas reizi
         </a>
     </div>
 </div>
