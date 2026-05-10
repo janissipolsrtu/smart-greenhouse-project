@@ -61,6 +61,100 @@
   </div>
 </div>
 
+<style>
+    .dashboard-layout-grid .greenhouse-grid-container {
+        overflow-x: auto;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        background: #f8f9fa;
+        padding: 8px;
+    }
+
+    .dashboard-layout-grid .greenhouse-grid {
+        display: grid;
+        grid-template-columns: 28px repeat({{ max_columns }}, 36px);
+        gap: 2px;
+        min-width: fit-content;
+    }
+
+    .dashboard-layout-grid .grid-cell {
+        width: 36px;
+        height: 36px;
+        border: 1px solid #d5d8dc;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        line-height: 1;
+        position: relative;
+    }
+
+    .dashboard-layout-grid .header-cell {
+        background: #6c757d;
+        color: #fff;
+        font-weight: 700;
+        font-size: 9px;
+    }
+
+    .dashboard-layout-grid .empty-cell {
+        background: #fff;
+        border-style: dashed;
+        border-color: #c9ced4;
+    }
+
+    .dashboard-layout-grid .plant-cell {
+        background: #d4edda;
+        border-color: #28a745;
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+    }
+
+    .dashboard-layout-grid .plant-cell.harvest-ready {
+        background: #fff3cd;
+        border-color: #ffc107;
+    }
+
+    .dashboard-layout-grid .plant-icon {
+        font-size: 12px;
+    }
+
+    .dashboard-layout-grid .plant-name {
+        font-size: 7px;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        padding: 0 1px;
+    }
+
+    .dashboard-layout-grid .path-cell {
+        background: #8b4513;
+        border-color: #654321;
+        color: #fff;
+    }
+
+    .dashboard-layout-grid .path-cell .fas {
+        font-size: 10px;
+    }
+
+    @media (max-width: 768px) {
+        .dashboard-layout-grid .greenhouse-grid {
+            grid-template-columns: 24px repeat({{ max_columns }}, 30px);
+        }
+
+        .dashboard-layout-grid .grid-cell {
+            width: 30px;
+            height: 30px;
+        }
+
+        .dashboard-layout-grid .plant-icon {
+            font-size: 10px;
+        }
+    }
+</style>
+
 <!-- Upcoming Plans -->
 <div class="row">
     <div class="col-lg-8">
@@ -129,8 +223,75 @@
                 {% endif %}
             </div>
         </div>
+        
+        <!-- Greenhouse Layout Section -->
+        <div class="card mt-4 dashboard-layout-grid">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-th-large me-2"></i>Siltumnīcas izkārtojums
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- Legend -->
+                <div class="mb-3">
+                    <div class="d-flex flex-wrap gap-3 small">
+                        <span><i class="fas fa-square text-light border"></i> Brīva vieta</span>
+                        <span>🍅 Augs</span>
+                        <span style="filter: brightness(1.2) saturate(1.5);">🍅 Gatavs ražai</span>
+                        <span style="background: #8B4513; color: white; padding: 2px 6px; border-radius: 3px;"><i class="fas fa-road"></i> Ceļš</span>
+                    </div>
+                </div>
+
+                <!-- Greenhouse Grid -->
+                <div class="greenhouse-grid-container">
+                    <div class="greenhouse-grid" id="greenhouse-grid">
+                        <!-- Column headers -->
+                        <div class="grid-cell header-cell"></div>
+                        {% for col in column_range %}
+                            <div class="grid-cell header-cell">{{ col }}</div>
+                        {% endfor %}
+                        
+                        <!-- Grid rows -->
+                        {% for row_data in grid_data %}
+                            <!-- Row header -->
+                            <div class="grid-cell header-cell">{{ forloop.counter }}</div>
+                            
+                            <!-- Grid cells for this row -->
+                            {% for cell in row_data %}
+                                {% if cell.cell_type == 'plant' %}
+                                    <div class="grid-cell plant-cell {% if cell.plant.is_ready_for_harvest %}harvest-ready{% endif %}" 
+                                         data-row="{{ cell.row }}" 
+                                         data-col="{{ cell.col }}"
+                                         data-cell-type="plant"
+                                         data-plant-id="{{ cell.plant.id }}"
+                                         title="{{ cell.plant.name }} {% if cell.plant.variety %}({{ cell.plant.variety }}){% endif %} - Stādīts: {{ cell.plant.planting_date }} ({{ cell.plant.days_since_planting }} dienas)">
+                                        <div class="plant-icon">🍅</div>
+                                        <div class="plant-name">{{ cell.plant.name|slice:":4" }}</div>
+                                    </div>
+                                {% elif cell.cell_type == 'path' %}
+                                    <div class="grid-cell path-cell" 
+                                         data-row="{{ cell.row }}" 
+                                         data-col="{{ cell.col }}"
+                                         data-cell-type="path"
+                                         title="Ceļš R{{ cell.row }}C{{ cell.col }}{% if cell.path.description %} - {{ cell.path.description }}{% endif %}">
+                                        <i class="fas fa-road"></i>
+                                    </div>
+                                {% else %}
+                                    <div class="grid-cell empty-cell" 
+                                         data-row="{{ cell.row }}" 
+                                         data-col="{{ cell.col }}"
+                                         data-cell-type="empty"
+                                         title="Rinda {{ cell.row }}, Kolonna {{ cell.col }}">
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    
+
     <div class="col-lg-4">
         <!-- Recent Activity -->
         <div class="card">

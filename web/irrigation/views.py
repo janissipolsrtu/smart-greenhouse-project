@@ -57,6 +57,53 @@ def dashboard_view(request):
         status='pending'
     ).count()
     
+    # Generate greenhouse layout grid
+    max_rows = 10
+    max_columns = 10
+    plants = Plant.objects.filter(active=True)
+    paths = PathCell.objects.all()
+    
+    grid_data = []
+    for row in range(1, max_rows + 1):
+        row_data = []
+        for col in range(1, max_columns + 1):
+            # Find plant at this position
+            plant_at_position = plants.filter(location_row=row, location_column=col).first()
+            # Find path at this position
+            path_at_position = paths.filter(row=row, column=col).first()
+            
+            if plant_at_position:
+                row_data.append({
+                    'cell_type': 'plant',
+                    'has_plant': True,
+                    'plant': plant_at_position,
+                    'has_path': False,
+                    'path': None,
+                    'row': row,
+                    'col': col
+                })
+            elif path_at_position:
+                row_data.append({
+                    'cell_type': 'path',
+                    'has_plant': False,
+                    'plant': None,
+                    'has_path': True,
+                    'path': path_at_position,
+                    'row': row,
+                    'col': col
+                })
+            else:
+                row_data.append({
+                    'cell_type': 'empty',
+                    'has_plant': False,
+                    'plant': None,
+                    'has_path': False,
+                    'path': None,
+                    'row': row,
+                    'col': col
+                })
+        grid_data.append(row_data)
+    
     context = {
         'total_cycles': total_cycles,
         'total_plans': total_cycles,
@@ -74,6 +121,11 @@ def dashboard_view(request):
         'total_plan_containers': total_plan_containers,
         'active_greenhouse': active_greenhouse,
         'all_greenhouses': all_greenhouses,
+        'grid_data': grid_data,
+        'max_rows': max_rows,
+        'max_columns': max_columns,
+        'row_range': range(1, max_rows + 1),
+        'column_range': range(1, max_columns + 1),
     }
 
     return render(request, 'irrigation/dashboard.html', context)
