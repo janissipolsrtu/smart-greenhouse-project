@@ -210,6 +210,7 @@ class GreenhouseConfig(models.Model):
 
     name = models.CharField(max_length=120, help_text="Siltumnīcas nosaukums")
     location = models.CharField(max_length=200, blank=True, help_text="Siltumnīcas atrašanās vieta")
+    season = models.CharField(max_length=100, blank=True, help_text="Sezona (piem., Pavasaris 2026)")
     is_active = models.BooleanField(default=False, help_text="Aktīvā siltumnīca")
     controller_ip = models.GenericIPAddressField(null=True, blank=True, help_text="Kontrollera IP adrese")
     controller_username = models.CharField(max_length=100, blank=True, help_text="Kontrollera lietotājvārds")

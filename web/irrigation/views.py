@@ -595,6 +595,10 @@ def plant_dashboard_view(request):
     now = timezone.now()
     today = now.date()
     
+    # Greenhouse context
+    active_greenhouse = GreenhouseConfig.get_config()
+    all_greenhouses = GreenhouseConfig.objects.all().order_by('name')
+    
     # Get plant statistics
     total_plants = Plant.objects.filter(active=True).count()
     plants_ready_for_harvest = Plant.objects.filter(
@@ -629,6 +633,8 @@ def plant_dashboard_view(request):
         'recent_plants': recent_plants,
         'layout_summary': layout_summary,
         'current_date': today,
+        'active_greenhouse': active_greenhouse,
+        'all_greenhouses': all_greenhouses,
     }
     
     return render(request, 'irrigation/plant_dashboard.html', context)
@@ -791,6 +797,10 @@ def greenhouse_layout_view(request):
     max_rows = int(request.GET.get('rows', 10))
     max_columns = int(request.GET.get('columns', 10))
     
+    # Greenhouse context
+    active_greenhouse = GreenhouseConfig.get_config()
+    all_greenhouses = GreenhouseConfig.objects.all().order_by('name')
+    
     # Get all active plants and path cells
     plants = Plant.objects.filter(active=True)
     paths = PathCell.objects.all()
@@ -843,6 +853,8 @@ def greenhouse_layout_view(request):
         'max_columns': max_columns,
         'row_range': range(1, max_rows + 1),
         'column_range': range(1, max_columns + 1),
+        'active_greenhouse': active_greenhouse,
+        'all_greenhouses': all_greenhouses,
     }
     
     return render(request, 'irrigation/greenhouse_layout.html', context)
@@ -1151,6 +1163,7 @@ def setup_greenhouse_view(request):
         greenhouse_id = request.POST.get('greenhouse_id', '').strip()
         name = request.POST.get('name', '').strip()
         location = request.POST.get('location', '').strip()
+        season = request.POST.get('season', '').strip()
 
         if not name:
             messages.error(request, 'Siltumnīcas nosaukums ir obligāts.')
@@ -1166,6 +1179,7 @@ def setup_greenhouse_view(request):
 
         config.name = name
         config.location = location
+        config.season = season
         config.save()
         messages.success(request, 'Siltumnīcas konfigurācija saglabāta!')
     return redirect('irrigation:setup')

@@ -3,10 +3,18 @@
 {% block title %}Augu pārskats - Gudrā siltumnīca{% endblock %}
 
 {% block content %}
-<div class="row mb-4">
+<div class="row mb-4 align-items-center">
     <div class="col">
-        <h1 class="h2 mb-0"><i class="fas fa-seedling me-2"></i>Augu pārskats</h1>
-        <p class="text-muted">Kopsavilkums par aktīvajiem augiem un ražas gatavību</p>
+        {% if active_greenhouse %}
+            <h1 class="h2 mb-0"><i class="fas fa-seedling text-success me-2"></i>{{ active_greenhouse.name }} – Augi</h1>
+            <div class="text-muted small">
+                {% if active_greenhouse.location %}<i class="fas fa-map-marker-alt me-1"></i>{{ active_greenhouse.location }}{% endif %}
+                {% if active_greenhouse.season %}<span class="ms-2"><i class="fas fa-leaf me-1"></i>{{ active_greenhouse.season }}</span>{% endif %}
+            </div>
+        {% else %}
+            <h1 class="h2 mb-0"><i class="fas fa-seedling me-2"></i>Augu pārskats</h1>
+            <p class="text-muted">Kopsavilkums par aktīvajiem augiem un ražas gatavību</p>
+        {% endif %}
     </div>
     <div class="col-auto d-flex gap-2">
         <a href="{% url 'irrigation:greenhouse_layout' %}" class="btn btn-outline-secondary">
