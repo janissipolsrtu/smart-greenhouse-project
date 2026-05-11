@@ -111,6 +111,22 @@ class GreenhouseUpdate(BaseModel):
     location: Optional[str] = None
     active: Optional[bool] = None
 
+
+class DevicePairingRequest(BaseModel):
+    broker_ip: str
+    port: int = 1883
+    mqtt_username: str
+    mqtt_password: str
+    duration: int = 60
+
+
+class DevicePairingStatusRequest(BaseModel):
+    broker_ip: str
+    port: int = 1883
+    mqtt_username: str
+    mqtt_password: str
+    listen_seconds: int = 8
+
 # Plant Management Pydantic Models
 class PlantBase(BaseModel):
     name: str  # Plant name or variety (FR-11)
@@ -637,6 +653,126 @@ async def health_check():
         "timestamp": datetime.now().isoformat(),
         "mqtt_connected": mqtt_client.connected
     }
+
+
+@app.post("/api/device/pairing", response_model=ApiResponse, tags=["Devices"])
+async def api_device_pairing(request: DevicePairingRequest):
+    """Start Zigbee2MQTT pairing by publishing permit_join with supplied MQTT credentials."""
+    try:
+        if request.duration < 10 or request.duration > 254:
+            raise HTTPException(status_code=400, detail="duration must be between 10 and 254 seconds")
+
+        client = mqtt.Client(protocol=mqtt.MQTTv311)
+        client.username_pw_set(request.mqtt_username, request.mqtt_password)
+        client.connect(request.broker_ip, request.port, 60)
+        client.loop_start()
+
+        payload = {
+            "time": request.duration,
+        }
+        result = client.publish("zigbee2mqtt/bridge/request/permit_join", json.dumps(payload), qos=0)
+
+        # Give network loop a short window to flush publish.
+        time.sleep(0.5)
+        client.loop_stop()
+        client.disconnect()
+
+        if result.rc != 0:
+            raise HTTPException(status_code=500, detail=f"Failed to publish permit_join, rc={result.rc}")
+
+        return ApiResponse(
+            success=True,
+            message=f"Pairing enabled for {request.duration} seconds",
+            data={
+                "broker": request.broker_ip,
+                "port": request.port,
+                "request_topic": "zigbee2mqtt/bridge/request/permit_join",
+                "request_payload": payload,
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error starting device pairing: {e}")
+        raise HTTPException(status_code=500, detail=f"Pairing error: {str(e)}")
+
+
+@app.post("/api/device/pairing-status", response_model=ApiResponse, tags=["Devices"])
+async def api_device_pairing_status(request: DevicePairingStatusRequest):
+    """Listen briefly on Zigbee2MQTT bridge topics and report whether pairing events were detected."""
+    try:
+        listen_seconds = max(1, min(request.listen_seconds, 30))
+        topic = "zigbee2mqtt/bridge/event"
+
+        events = []
+        paired_detected = False
+        connect_event = threading.Event()
+
+        client = mqtt.Client(protocol=mqtt.MQTTv311)
+        client.username_pw_set(request.mqtt_username, request.mqtt_password)
+
+        def on_connect(c, userdata, flags, rc):
+            if rc == 0:
+                c.subscribe(topic, qos=0)
+                connect_event.set()
+
+        def on_message(c, userdata, msg):
+            nonlocal paired_detected
+            raw_payload = msg.payload.decode(errors="replace")
+            parsed_payload = raw_payload
+            event_type = None
+
+            try:
+                payload_obj = json.loads(raw_payload)
+                parsed_payload = payload_obj
+                if isinstance(payload_obj, dict):
+                    event_type = str(payload_obj.get("type") or "").lower()
+            except json.JSONDecodeError:
+                pass
+
+            if event_type == "device_joined":
+                paired_detected = True
+
+            events.append({
+                "topic": msg.topic,
+                "event_type": event_type,
+                "payload": parsed_payload,
+            })
+
+        client.on_connect = on_connect
+        client.on_message = on_message
+
+        client.connect(request.broker_ip, request.port, 60)
+        client.loop_start()
+
+        if not connect_event.wait(timeout=5):
+            client.loop_stop()
+            client.disconnect()
+            raise HTTPException(status_code=500, detail="Failed to connect/subscribe to broker")
+
+        time.sleep(listen_seconds)
+        client.loop_stop()
+        client.disconnect()
+
+        return ApiResponse(
+            success=True,
+            message="Pairing status check completed",
+            data={
+                "broker": request.broker_ip,
+                "port": request.port,
+                "topic": topic,
+                "listen_seconds": listen_seconds,
+                "paired_detected": paired_detected,
+                "events_count": len(events),
+                "events": events[:20],
+                "hint": "Pairing succeeds when zigbee2mqtt/bridge/event contains type=device_joined.",
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error checking pairing status: {e}")
+        raise HTTPException(status_code=500, detail=f"Pairing status error: {str(e)}")
 
 # Watering Cycle API Endpoints
 @app.get("/api/watering/cycle", tags=["Watering Cycle"])

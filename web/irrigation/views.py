@@ -7,10 +7,11 @@ from django.db.models import Avg, Max, Min, Count, Q
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 import os
-from .models import WateringPlan, WateringCycle, SensorData, Plant, PathCell, GreenhouseConfig
+from .models import WateringPlan, WateringCycle, SensorData, Plant, PathCell, GreenhouseConfig, Device
 import uuid
 import time
 import json
+import threading
 from datetime import datetime, timedelta
 
 
@@ -219,7 +220,7 @@ class WateringPlanListView(ListView):
     paginate_by = 10
 
     def get_queryset(self):
-        return WateringPlan.objects.all().order_by('-created_at')
+        return WateringPlan.objects.select_related('greenhouse_config').all().order_by('-created_at')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1258,13 +1259,15 @@ def paths_api(request):
 # Setup / Configuration views
 # ---------------------------------------------------------------------------
 
+@ensure_csrf_cookie
 def setup_view(request):
-    """List all greenhouse configurations."""
-    greenhouses = GreenhouseConfig.objects.all().order_by('name')
+    """List all greenhouse configurations with their paired devices."""
+    greenhouses = GreenhouseConfig.objects.prefetch_related('devices').all().order_by('name')
     active = GreenhouseConfig.get_config()
     return render(request, 'irrigation/setup.html', {
         'greenhouses': greenhouses,
         'active': active,
+        'device_type_choices': Device.DEVICE_TYPE_CHOICES,
     })
 
 
@@ -1316,7 +1319,7 @@ def setup_controller_view(request):
         config.controller_ip = controller_ip or None
         config.controller_username = controller_username
         if controller_password:
-            config.set_password(controller_password)
+            config.controller_password = controller_password
         config.save()
         messages.success(request, 'Kontrollera iestatījumi saglabāti!')
     return redirect('irrigation:setup')
@@ -1348,6 +1351,44 @@ def setup_delete_greenhouse_view(request, greenhouse_id):
 
 
 @require_http_methods(['POST'])
+def setup_add_device_view(request, greenhouse_id):
+    """Pair (register) a device to a greenhouse."""
+    greenhouse = get_object_or_404(GreenhouseConfig, pk=greenhouse_id)
+    zigbee_id = request.POST.get('zigbee_id', '').strip()
+    name = request.POST.get('name', '').strip()
+    device_type = request.POST.get('device_type', 'other').strip()
+    notes = request.POST.get('notes', '').strip()
+
+    if not zigbee_id or not name:
+        messages.error(request, 'Zigbee ID un nosaukums ir obligāti.')
+        return redirect('irrigation:setup')
+
+    try:
+        Device.objects.create(
+            greenhouse=greenhouse,
+            zigbee_id=zigbee_id,
+            name=name,
+            device_type=device_type,
+            notes=notes,
+        )
+        messages.success(request, f'Ierīce "{name}" pievienota siltumnīcai "{greenhouse.name}".')
+    except Exception as exc:
+        messages.error(request, f'Kļūda pievienojot ierīci: {exc}')
+    return redirect('irrigation:setup')
+
+
+@require_http_methods(['POST'])
+def setup_remove_device_view(request, device_id):
+    """Unpair (delete) a device from a greenhouse."""
+    device = get_object_or_404(Device, pk=device_id)
+    name = device.name
+    greenhouse_name = device.greenhouse.name
+    device.delete()
+    messages.success(request, f'Ierīce "{name}" noņemta no siltumnīcas "{greenhouse_name}".')
+    return redirect('irrigation:setup')
+
+
+@require_http_methods(['POST'])
 def setup_pair_device_view(request):
     """Trigger MQTT permit_join so a new Zigbee device can be paired."""
     try:
@@ -1365,6 +1406,249 @@ def setup_pair_device_view(request):
             port=port,
         )
         return JsonResponse({'success': True, 'message': f'Ierīces savienošana iespējota uz {duration} sekundēm.'})
+    except ImportError:
+        return JsonResponse({'success': False, 'error': 'paho-mqtt nav instalēts.'}, status=500)
+    except Exception as exc:
+        return JsonResponse({'success': False, 'error': str(exc)}, status=500)
+
+
+def _get_request_payload(request):
+    """Parse JSON body when present, otherwise return POST payload."""
+    body = request.body
+    if body:
+        try:
+            return json.loads(body)
+        except (json.JSONDecodeError, ValueError):
+            pass
+    if request.POST:
+        return request.POST
+    return {}
+
+
+def _extract_mqtt_connection_params(payload):
+    """Extract broker credentials and publish duration from request payload."""
+    broker = (
+        payload.get('broker_ip')
+        or payload.get('mqtt_broker')
+        or payload.get('broker')
+        or os.environ.get('MQTT_BROKER', 'mosquitto')
+    )
+    port = int(payload.get('port') or payload.get('mqtt_port') or 1883)
+    username = payload.get('username') or payload.get('mqtt_username') or os.environ.get('MQTT_USERNAME', 'mosquitto_api_user1')
+    password = payload.get('password') or payload.get('mqtt_password') or os.environ.get('MQTT_PASSWORD', 'mosquitto_password$')
+    duration = int(payload.get('duration') or 60)
+    return broker, port, username, password, duration
+
+
+def _resolve_greenhouse_mqtt_params(payload):
+    """Resolve MQTT connection params from selected greenhouse with request/env fallback."""
+    greenhouse_id = payload.get('greenhouse_id')
+    broker, port, username, password, duration = _extract_mqtt_connection_params(payload)
+
+    if greenhouse_id:
+        greenhouse = GreenhouseConfig.objects.filter(pk=greenhouse_id).first()
+        if greenhouse:
+            if greenhouse.controller_ip:
+                broker = greenhouse.controller_ip
+            if greenhouse.controller_username:
+                username = greenhouse.controller_username
+
+            stored_password = (greenhouse.controller_password or '').strip()
+            # Older records may contain salted hashes and cannot be used for MQTT auth.
+            if stored_password and ':' not in stored_password:
+                password = stored_password
+
+    if not password:
+        password = os.environ.get('MQTT_PASSWORD', 'mosquitto_password$')
+
+    return broker, port, username, password, duration
+
+
+def _normalize_bridge_state(raw_payload):
+    """Normalize zigbee2mqtt/bridge/state payload to online/offline when possible."""
+    try:
+        parsed = json.loads(raw_payload)
+        if isinstance(parsed, dict):
+            state_val = str(parsed.get('state', '')).strip().lower()
+        else:
+            state_val = str(parsed).strip().lower()
+    except json.JSONDecodeError:
+        state_val = str(raw_payload).strip().lower()
+
+    if state_val in {'online', 'offline'}:
+        return state_val
+    return 'offline'
+
+
+@require_http_methods(['GET'])
+def api_bridge_state(request):
+    """Read current Zigbee2MQTT bridge state from zigbee2mqtt/bridge/state."""
+    greenhouse_id = request.GET.get('greenhouse_id')
+    broker = os.environ.get('MQTT_BROKER', 'mosquitto')
+    port = int(os.environ.get('MQTT_PORT', 1883))
+    username = os.environ.get('MQTT_USERNAME', '')
+    password = os.environ.get('MQTT_PASSWORD', '')
+
+    if greenhouse_id:
+        greenhouse = GreenhouseConfig.objects.filter(pk=greenhouse_id).first()
+        if greenhouse:
+            if greenhouse.controller_ip:
+                broker = greenhouse.controller_ip
+            if greenhouse.controller_username:
+                username = greenhouse.controller_username
+            stored_password = (greenhouse.controller_password or '').strip()
+            if stored_password and ':' not in stored_password:
+                password = stored_password
+
+    try:
+        import paho.mqtt.client as mqtt
+
+        topic = 'zigbee2mqtt/bridge/state'
+        state_holder = {'value': 'offline'}
+        received_event = threading.Event()
+
+        client = mqtt.Client(protocol=mqtt.MQTTv311)
+        if username and password:
+            client.username_pw_set(username, password)
+
+        def on_connect(cl, userdata, flags, rc):
+            cl.subscribe(topic, qos=0)
+
+        def on_message(cl, userdata, msg):
+            raw_payload = msg.payload.decode(errors='replace')
+            state_holder['value'] = _normalize_bridge_state(raw_payload)
+            received_event.set()
+
+        client.on_connect = on_connect
+        client.on_message = on_message
+
+        client.connect(broker, port, 10)
+        client.loop_start()
+        received_event.wait(3)
+        client.loop_stop()
+        client.disconnect()
+
+        return JsonResponse({
+            'success': True,
+            'state': state_holder['value'],
+            'topic': topic,
+            'broker': broker,
+            'port': port,
+        })
+    except ImportError:
+        return JsonResponse({'success': False, 'state': 'offline', 'error': 'paho-mqtt nav instalēts.'}, status=500)
+    except Exception as exc:
+        return JsonResponse({'success': False, 'state': 'offline', 'error': str(exc)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(['POST'])
+def api_device_pairing(request):
+    """Start Zigbee2MQTT pairing via broker credentials provided by client."""
+    payload = _get_request_payload(request)
+    broker, port, username, password, duration = _resolve_greenhouse_mqtt_params(payload)
+
+    if not broker:
+        return JsonResponse({'success': False, 'error': 'broker_ip ir obligāts'}, status=400)
+    if not username or not password:
+        return JsonResponse({'success': False, 'error': 'mqtt username/password ir obligāti'}, status=400)
+    if duration < 10 or duration > 254:
+        return JsonResponse({'success': False, 'error': 'duration jābūt no 10 līdz 254 sekundēm'}, status=400)
+
+    try:
+        import paho.mqtt.publish as publish
+
+        request_payload = json.dumps({'time': duration})
+        publish.single(
+            topic='zigbee2mqtt/bridge/request/permit_join',
+            payload=request_payload,
+            hostname=broker,
+            port=port,
+            auth={'username': username, 'password': password},
+            qos=0,
+        )
+        return JsonResponse({
+            'success': True,
+            'message': f'Pairing ieslēgts uz {duration} sekundēm',
+            'broker': broker,
+            'port': port,
+            'request_topic': 'zigbee2mqtt/bridge/request/permit_join',
+            'request_payload': {'time': duration},
+        })
+    except ImportError:
+        return JsonResponse({'success': False, 'error': 'paho-mqtt nav instalēts.'}, status=500)
+    except Exception as exc:
+        return JsonResponse({'success': False, 'error': str(exc)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(['POST'])
+def api_device_pairing_status(request):
+    """Listen briefly for Zigbee2MQTT bridge events and report pairing detection."""
+    payload = _get_request_payload(request)
+    broker, port, username, password, _ = _resolve_greenhouse_mqtt_params(payload)
+    listen_seconds = int(payload.get('listen_seconds') or 8)
+    listen_seconds = max(1, min(listen_seconds, 30))
+
+    if not broker:
+        return JsonResponse({'success': False, 'error': 'broker_ip ir obligāts'}, status=400)
+    if not username or not password:
+        return JsonResponse({'success': False, 'error': 'mqtt username/password ir obligāti'}, status=400)
+
+    try:
+        import paho.mqtt.client as mqtt
+
+        topic = 'zigbee2mqtt/bridge/event'
+        events = []
+        paired_detected = False
+
+        client = mqtt.Client(protocol=mqtt.MQTTv311)
+        client.username_pw_set(username, password)
+
+        def on_connect(cl, userdata, flags, rc):
+            cl.subscribe(topic, qos=0)
+
+        def on_message(cl, userdata, msg):
+            nonlocal paired_detected
+            raw_payload = msg.payload.decode(errors='replace')
+            event_type = None
+            parsed_payload = None
+            try:
+                parsed_payload = json.loads(raw_payload)
+                if isinstance(parsed_payload, dict):
+                    event_type = str(parsed_payload.get('type') or '').lower()
+            except json.JSONDecodeError:
+                parsed_payload = raw_payload
+
+            if event_type == 'device_joined':
+                paired_detected = True
+
+            events.append({
+                'topic': msg.topic,
+                'payload': parsed_payload,
+                'event_type': event_type,
+            })
+
+        client.on_connect = on_connect
+        client.on_message = on_message
+
+        client.connect(broker, port, 60)
+        client.loop_start()
+        time.sleep(listen_seconds)
+        client.loop_stop()
+        client.disconnect()
+
+        return JsonResponse({
+            'success': True,
+            'broker': broker,
+            'port': port,
+            'topic': topic,
+            'listen_seconds': listen_seconds,
+            'paired_detected': paired_detected,
+            'events_count': len(events),
+            'events': events[:20],
+            'hint': 'Pairing uzskatāms par veiksmīgu, ja zigbee2mqtt/bridge/event satur type=device_joined.',
+        })
     except ImportError:
         return JsonResponse({'success': False, 'error': 'paho-mqtt nav instalēts.'}, status=500)
     except Exception as exc:

@@ -253,6 +253,51 @@ class GreenhouseConfig(models.Model):
         return hashlib.sha256(f"{salt}{raw_password}".encode()).hexdigest() == hashed
 
 
+class Device(models.Model):
+    """A physical Zigbee/MQTT device paired to a specific greenhouse."""
+
+    DEVICE_TYPE_CHOICES = [
+        ('irrigation_controller', 'Irrigation Controller'),
+        ('temperature_sensor', 'Temperature Sensor'),
+        ('humidity_sensor', 'Humidity Sensor'),
+        ('other', 'Other'),
+    ]
+
+    zigbee_id = models.CharField(
+        max_length=100,
+        help_text="Zigbee IEEE address, e.g. 0x540f57fffe890af8",
+    )
+    name = models.CharField(max_length=120, help_text="Human-readable device name")
+    device_type = models.CharField(
+        max_length=40,
+        choices=DEVICE_TYPE_CHOICES,
+        default='other',
+        help_text="Type of device",
+    )
+    greenhouse = models.ForeignKey(
+        GreenhouseConfig,
+        on_delete=models.CASCADE,
+        related_name='devices',
+        help_text="Greenhouse this device belongs to",
+    )
+    active = models.BooleanField(default=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'devices'
+        ordering = ['device_type', 'name']
+        unique_together = [('greenhouse', 'zigbee_id')]
+
+    def __str__(self):
+        return f"{self.name} ({self.zigbee_id}) @ {self.greenhouse.name}"
+
+    @property
+    def mqtt_topic(self):
+        return f"zigbee2mqtt/{self.zigbee_id}"
+
+
 class PathCell(models.Model):
     """Model for storing greenhouse path cells (walkways between beds)"""
     

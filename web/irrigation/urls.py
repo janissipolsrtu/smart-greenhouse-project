@@ -38,6 +38,9 @@ urlpatterns = [
     path('api/health/', views.health_check_api, name='health_check_api'),
     path('api/plants/', views.plants_api, name='plants_api'),
     path('api/paths/', views.paths_api, name='paths_api'),
+    path('api/bridge-state/', views.api_bridge_state, name='api_bridge_state'),
+    path('api/device/pairing/', views.api_device_pairing, name='api_device_pairing'),
+    path('api/device/pairing-status/', views.api_device_pairing_status, name='api_device_pairing_status'),
 
     # Setup / Configuration
     path('setup/', views.setup_view, name='setup'),
@@ -46,4 +49,6 @@ urlpatterns = [
     path('setup/pair-device/', views.setup_pair_device_view, name='setup_pair_device'),
     path('setup/<int:greenhouse_id>/select/', views.setup_select_greenhouse_view, name='setup_select'),
     path('setup/<int:greenhouse_id>/delete/', views.setup_delete_greenhouse_view, name='setup_delete'),
+    path('setup/<int:greenhouse_id>/add-device/', views.setup_add_device_view, name='setup_add_device'),
+    path('setup/device/<int:device_id>/remove/', views.setup_remove_device_view, name='setup_remove_device'),
 ]
