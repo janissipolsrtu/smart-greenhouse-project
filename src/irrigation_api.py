@@ -25,6 +25,7 @@ from enum import Enum
 from database import init_database, test_database_connection
 from irrigation_db_service import WateringCycleService, WateringPlanService
 from plant_db_service import PlantService
+from greenhouse_db_service import GreenhouseService
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -83,6 +84,32 @@ class ApiResponse(BaseModel):
     message: str
     data: Optional[Dict[Any, Any]] = None
     timestamp: str = datetime.utcnow().isoformat()
+
+
+class GreenhouseBase(BaseModel):
+    name: str
+    mqtt_username: str
+    mqtt_password: str
+    mqtt_broker: str = "192.168.8.151"
+    mqtt_port: int = 1883
+    description: Optional[str] = None
+    location: Optional[str] = None
+    active: bool = True
+
+
+class GreenhouseCreate(GreenhouseBase):
+    pass
+
+
+class GreenhouseUpdate(BaseModel):
+    name: Optional[str] = None
+    mqtt_username: Optional[str] = None
+    mqtt_password: Optional[str] = None
+    mqtt_broker: Optional[str] = None
+    mqtt_port: Optional[int] = None
+    description: Optional[str] = None
+    location: Optional[str] = None
+    active: Optional[bool] = None
 
 # Plant Management Pydantic Models
 class PlantBase(BaseModel):
@@ -960,6 +987,150 @@ async def remove_cycle_from_plan(plan_id: str, cycle_id: str):
         raise HTTPException(status_code=500, detail=f"Failed to remove cycle from plan: {str(e)}")
 
 # =================== PLANT MANAGEMENT API ENDPOINTS ===================
+
+# =================== GREENHOUSE MANAGEMENT API ENDPOINTS ===================
+
+@app.post("/api/greenhouses", response_model=ApiResponse, tags=["Greenhouse Management"])
+async def create_greenhouse(greenhouse: GreenhouseCreate):
+    """Create greenhouse config with MQTT credentials stored in database."""
+    try:
+        if greenhouse.mqtt_port <= 0 or greenhouse.mqtt_port > 65535:
+            raise HTTPException(status_code=400, detail="MQTT port must be between 1 and 65535")
+
+        if not greenhouse.mqtt_username.strip():
+            raise HTTPException(status_code=400, detail="MQTT username is required")
+
+        if not greenhouse.mqtt_password.strip():
+            raise HTTPException(status_code=400, detail="MQTT password is required")
+
+        db_greenhouse = GreenhouseService.create_greenhouse(
+            name=greenhouse.name,
+            mqtt_username=greenhouse.mqtt_username,
+            mqtt_password=greenhouse.mqtt_password,
+            mqtt_broker=greenhouse.mqtt_broker,
+            mqtt_port=greenhouse.mqtt_port,
+            description=greenhouse.description,
+            location=greenhouse.location,
+            active=greenhouse.active,
+        )
+
+        return ApiResponse(
+            success=True,
+            message="Greenhouse created successfully",
+            data={"greenhouse": db_greenhouse.to_dict()}
+        )
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating greenhouse: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create greenhouse: {str(e)}")
+
+
+@app.get("/api/greenhouses", response_model=ApiResponse, tags=["Greenhouse Management"])
+async def get_greenhouses(active_only: bool = False):
+    """Get all greenhouses with MQTT configuration metadata."""
+    try:
+        greenhouses = GreenhouseService.get_all_greenhouses(active_only=active_only)
+        greenhouse_data = [greenhouse.to_dict() for greenhouse in greenhouses]
+        return ApiResponse(
+            success=True,
+            message=f"Retrieved {len(greenhouse_data)} greenhouses",
+            data={
+                "greenhouses": greenhouse_data,
+                "count": len(greenhouse_data),
+                "active_only": active_only,
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error getting greenhouses: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve greenhouses: {str(e)}")
+
+
+@app.get("/api/greenhouses/{greenhouse_id}", response_model=ApiResponse, tags=["Greenhouse Management"])
+async def get_greenhouse(greenhouse_id: str):
+    """Get one greenhouse by ID."""
+    try:
+        greenhouse = GreenhouseService.get_greenhouse(greenhouse_id)
+        if not greenhouse:
+            raise HTTPException(status_code=404, detail="Greenhouse not found")
+
+        return ApiResponse(
+            success=True,
+            message="Greenhouse retrieved successfully",
+            data={"greenhouse": greenhouse.to_dict()}
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting greenhouse {greenhouse_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve greenhouse: {str(e)}")
+
+
+@app.put("/api/greenhouses/{greenhouse_id}", response_model=ApiResponse, tags=["Greenhouse Management"])
+async def update_greenhouse(greenhouse_id: str, greenhouse_update: GreenhouseUpdate):
+    """Update greenhouse metadata and MQTT credentials."""
+    try:
+        existing = GreenhouseService.get_greenhouse(greenhouse_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="Greenhouse not found")
+
+        update_data = {}
+        for field, value in greenhouse_update.dict().items():
+            if value is not None:
+                update_data[field] = value
+
+        if not update_data:
+            raise HTTPException(status_code=400, detail="No fields to update")
+
+        if "mqtt_port" in update_data and (update_data["mqtt_port"] <= 0 or update_data["mqtt_port"] > 65535):
+            raise HTTPException(status_code=400, detail="MQTT port must be between 1 and 65535")
+
+        if "mqtt_username" in update_data and not update_data["mqtt_username"].strip():
+            raise HTTPException(status_code=400, detail="MQTT username cannot be empty")
+
+        if "mqtt_password" in update_data and not update_data["mqtt_password"].strip():
+            raise HTTPException(status_code=400, detail="MQTT password cannot be empty")
+
+        updated = GreenhouseService.update_greenhouse(greenhouse_id, **update_data)
+        return ApiResponse(
+            success=True,
+            message="Greenhouse updated successfully",
+            data={"greenhouse": updated.to_dict()}
+        )
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating greenhouse {greenhouse_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update greenhouse: {str(e)}")
+
+
+@app.delete("/api/greenhouses/{greenhouse_id}", response_model=ApiResponse, tags=["Greenhouse Management"])
+async def delete_greenhouse(greenhouse_id: str):
+    """Soft-delete greenhouse by marking it inactive."""
+    try:
+        success = GreenhouseService.delete_greenhouse(greenhouse_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Greenhouse not found")
+
+        return ApiResponse(
+            success=True,
+            message="Greenhouse removed successfully",
+            data={
+                "greenhouse_id": greenhouse_id,
+                "action": "deactivated"
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting greenhouse {greenhouse_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to remove greenhouse: {str(e)}")
+
+# =================== END GREENHOUSE MANAGEMENT API ENDPOINTS ===================
 
 @app.post("/api/plants", response_model=ApiResponse, tags=["Plant Management"])
 async def create_plant(plant: PlantCreate):

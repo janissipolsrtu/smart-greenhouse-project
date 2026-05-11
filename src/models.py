@@ -70,6 +70,44 @@ class WateringCycle(Base):
         }
 
 
+class Greenhouse(Base):
+    """Database model for greenhouse-specific configuration, including MQTT auth"""
+    __tablename__ = "greenhouses"
+
+    id = Column(String, primary_key=True, default=lambda: f"greenhouse_{int(datetime.utcnow().timestamp())}_{uuid.uuid4().hex[:8]}")
+    name = Column(String(120), nullable=False, index=True)
+    description = Column(Text, nullable=True)
+    location = Column(String(200), nullable=True)
+    mqtt_broker = Column(String(120), nullable=False, default="192.168.8.151")
+    mqtt_port = Column(Integer, nullable=False, default=1883)
+    mqtt_username = Column(String(120), nullable=True)
+    mqtt_password = Column(Text, nullable=True)
+    active = Column(Boolean, default=True, nullable=False, index=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    def __repr__(self):
+        return f"<Greenhouse(id='{self.id}', name='{self.name}', broker='{self.mqtt_broker}:{self.mqtt_port}')>"
+
+    def to_dict(self, include_sensitive: bool = False):
+        payload = {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "location": self.location,
+            "mqtt_broker": self.mqtt_broker,
+            "mqtt_port": self.mqtt_port,
+            "mqtt_username": self.mqtt_username,
+            "has_mqtt_password": bool(self.mqtt_password),
+            "active": self.active,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+        if include_sensitive:
+            payload["mqtt_password"] = self.mqtt_password
+        return payload
+
+
 class Plant(Base):
     """Database model for plant registration and management"""
     __tablename__ = "plants"
