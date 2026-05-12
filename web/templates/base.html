@@ -106,11 +106,34 @@
                     </li>
                 </ul>
                 <ul class="navbar-nav">
+                    {% if user.is_authenticated %}
                     <li class="nav-item">
                         <a class="nav-link" href="http://localhost:5555" target="_blank">
                             <i class="fas fa-chart-line me-1"></i>Uzraudzība
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <span class="nav-link disabled">
+                            <i class="fas fa-user me-1"></i>{{ user.email|default:user.username }}
+                        </span>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'irrigation:logout' %}">
+                            <i class="fas fa-sign-out-alt me-1"></i>Iziet
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'irrigation:login' %}">
+                            <i class="fas fa-sign-in-alt me-1"></i>Pieslēgties
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'irrigation:register' %}">
+                            <i class="fas fa-user-plus me-1"></i>Reģistrēties
+                        </a>
+                    </li>
+                    {% endif %}
                 </ul>
             </div>
         </div>

@@ -1,14 +1,23 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
+from django.contrib.auth import login, logout
+from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.auth.models import User
+from django.contrib.auth.tokens import default_token_generator
 from django.utils import timezone
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.views.generic import ListView
 from django.http import JsonResponse
 from django.db import connection
 from django.db.models import Avg, Max, Min, Count, Q
+from django.core.mail import send_mail
+from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 import os
 from .models import WateringPlan, WateringCycle, SensorData, Plant, PathCell, GreenhouseConfig, Device
+from .forms import RegistrationForm
 import uuid
 import time
 import json
@@ -24,6 +33,100 @@ class WateringCycleListView(ListView):
     
     def get_queryset(self):
         return WateringCycle.objects.all().order_by('-scheduled_time')
+
+
+@require_http_methods(["GET", "POST"])
+def login_view(request):
+    """Login page for web UI users."""
+    if request.user.is_authenticated:
+        return redirect('irrigation:dashboard')
+
+    form = AuthenticationForm(request, data=request.POST or None)
+    if request.method == 'POST':
+        if form.is_valid():
+            user = form.get_user()
+            login(request, user)
+            messages.success(request, 'Pieslēgšanās veiksmīga.')
+            next_url = request.GET.get('next') or request.POST.get('next')
+            if next_url:
+                return redirect(next_url)
+            return redirect('irrigation:dashboard')
+
+        username = (request.POST.get('username') or '').strip().lower()
+        if username and User.objects.filter(username=username, is_active=False).exists():
+            messages.warning(request, 'Lietotājs vēl nav apstiprināts. Pārbaudiet e-pastu un apstipriniet kontu.')
+
+    return render(request, 'registration/login.html', {'form': form, 'next': request.GET.get('next', '')})
+
+
+def logout_view(request):
+    """Logout current user."""
+    logout(request)
+    messages.info(request, 'Jūs esat atslēdzies no sistēmas.')
+    return redirect('irrigation:login')
+
+
+@require_http_methods(["GET", "POST"])
+def register_view(request):
+    """Self-registration with email confirmation."""
+    if request.user.is_authenticated:
+        return redirect('irrigation:dashboard')
+
+    form = RegistrationForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        email = form.cleaned_data['email'].strip().lower()
+        password = form.cleaned_data['password1']
+
+        user = User.objects.create_user(
+            username=email,
+            email=email,
+            password=password,
+            is_active=False,
+        )
+
+        uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+        verify_url = request.build_absolute_uri(
+            reverse('irrigation:verify_email', kwargs={'uidb64': uidb64, 'token': token})
+        )
+
+        send_mail(
+            subject='Apstipriniet kontu Gudrā siltumnīca',
+            message=(
+                'Paldies par reģistrāciju.\n\n'
+                'Lai aktivizētu kontu, atveriet saiti:\n'
+                f'{verify_url}\n\n'
+                'Ja šo pieprasījumu neveicāt jūs, ignorējiet šo vēstuli.'
+            ),
+            from_email=os.getenv('DEFAULT_FROM_EMAIL', 'no-reply@smart-greenhouse.local'),
+            recipient_list=[email],
+            fail_silently=False,
+        )
+
+        messages.success(request, 'Reģistrācija veiksmīga. Pārbaudiet e-pastu un apstipriniet kontu.')
+        return redirect('irrigation:login')
+
+    return render(request, 'registration/register.html', {'form': form})
+
+
+def verify_email_view(request, uidb64, token):
+    """Activate account via email link token."""
+    user = None
+    try:
+        uid = force_str(urlsafe_base64_decode(uidb64))
+        user = User.objects.get(pk=uid)
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        user = None
+
+    if user and default_token_generator.check_token(user, token):
+        user.is_active = True
+        user.save(update_fields=['is_active'])
+        login(request, user)
+        messages.success(request, 'E-pasts apstiprināts. Konts aktivizēts.')
+        return redirect('irrigation:dashboard')
+
+    messages.error(request, 'Apstiprināšanas saite nav derīga vai ir beigusies.')
+    return redirect('irrigation:login')
 
 
 def dashboard_view(request):

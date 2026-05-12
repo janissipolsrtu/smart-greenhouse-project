@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+
+{% block title %}Pieslēgties{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h4 class="mb-0"><i class="fas fa-sign-in-alt me-2"></i>Pieslēgties sistēmai</h4>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ next }}">
+
+                    <div class="mb-3">
+                        <label for="id_username" class="form-label">E-pasts</label>
+                        <input type="email" name="username" class="form-control" id="id_username" required>
+                        {% if form.username.errors %}
+                            <div class="text-danger small mt-1">{{ form.username.errors|join:', ' }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="id_password" class="form-label">Parole</label>
+                        <input type="password" name="password" class="form-control" id="id_password" required>
+                        {% if form.password.errors %}
+                            <div class="text-danger small mt-1">{{ form.password.errors|join:', ' }}</div>
+                        {% endif %}
+                    </div>
+
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger py-2">{{ form.non_field_errors|join:', ' }}</div>
+                    {% endif %}
+
+                    <button type="submit" class="btn btn-primary w-100">Pieslēgties</button>
+                </form>
+            </div>
+            <div class="card-footer text-center">
+                <span class="text-muted">Nav konta?</span>
+                <a href="{% url 'irrigation:register' %}">Reģistrēties</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
