@@ -13,7 +13,6 @@ from datetime import datetime
 from typing import Dict, Any
 import paho.mqtt.client as mqtt
 import psycopg2
-from psycopg2.extras import RealDictCursor
 import os
 
 # Configure logging
@@ -28,6 +27,8 @@ MQTT_BROKER = os.getenv('MQTT_BROKER', '192.168.8.151')
 MQTT_PORT = int(os.getenv('MQTT_PORT', '1883'))
 MQTT_TOPIC = os.getenv('MQTT_TOPIC', 'zigbee2mqtt/+')  # Subscribe to all Zigbee2MQTT topics
 MQTT_KEEPALIVE = int(os.getenv('MQTT_KEEPALIVE', '60'))
+MQTT_USERNAME = os.getenv('MQTT_USERNAME', 'mosquitto_api_user1')
+MQTT_PASSWORD = os.getenv('MQTT_PASSWORD', 'mosquitto_password$')
 
 # Database configuration
 DB_HOST = os.getenv('POSTGRES_HOST', 'postgres')
@@ -43,7 +44,7 @@ class SensorDataCollector:
         self.running = True
         
     def setup_database(self):
-        """Create sensor_data table if it doesn't exist"""
+        """Create sensor_measurements table if it doesn't exist"""
         try:
             self.db_connection = psycopg2.connect(
                 host=DB_HOST,
@@ -55,30 +56,42 @@ class SensorDataCollector:
             
             cursor = self.db_connection.cursor()
             
-            # Create sensor_data table
+            # Create sensor_measurements table aligned with time-series analytics use-cases.
             create_table_sql = """
-            CREATE TABLE IF NOT EXISTS sensor_data (
-                id SERIAL PRIMARY KEY,
+            CREATE TABLE IF NOT EXISTS sensor_measurements (
+                id BIGSERIAL,
                 device_name VARCHAR(100) NOT NULL,
-                temperature DECIMAL(5,2),
-                humidity INTEGER,
+                topic VARCHAR(255),
+                temperature DOUBLE PRECISION,
+                humidity DOUBLE PRECISION,
                 linkquality INTEGER,
-                max_temperature DECIMAL(5,2),
+                battery INTEGER,
+                max_temperature DOUBLE PRECISION,
+                min_temperature DOUBLE PRECISION,
+                temperature_sensitivity DOUBLE PRECISION,
+                temperature_calibration DOUBLE PRECISION,
+                temperature_sampling INTEGER,
                 temperature_unit VARCHAR(20),
+                humidity_calibration DOUBLE PRECISION,
+                soil_moisture DOUBLE PRECISION,
+                soil_calibration DOUBLE PRECISION,
+                soil_sampling INTEGER,
+                soil_warning INTEGER,
+                dry BOOLEAN,
                 raw_data JSONB,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                timestamp TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
             
-            CREATE INDEX IF NOT EXISTS idx_sensor_timestamp ON sensor_data(timestamp);
-            CREATE INDEX IF NOT EXISTS idx_sensor_device ON sensor_data(device_name);
+            CREATE INDEX IF NOT EXISTS idx_sensor_measurements_ts ON sensor_measurements(timestamp DESC);
+            CREATE INDEX IF NOT EXISTS idx_sensor_measurements_device_ts ON sensor_measurements(device_name, timestamp DESC);
             """
             
             cursor.execute(create_table_sql)
             self.db_connection.commit()
             cursor.close()
             
-            logger.info("✅ Database setup completed - sensor_data table ready")
+            logger.info("Database setup completed - sensor_measurements table ready")
             
         except Exception as e:
             logger.error(f"❌ Database setup failed: {e}")
@@ -92,7 +105,22 @@ class SensorDataCollector:
             client.subscribe(MQTT_TOPIC)
             logger.info(f"📡 Subscribed to MQTT topic: {MQTT_TOPIC}")
         else:
-            logger.error(f"❌ Failed to connect to MQTT broker, code: {rc}")
+            rc_codes = {
+                1: "incorrect protocol version",
+                2: "invalid client identifier",
+                3: "server unavailable",
+                4: "bad username or password",
+                5: "not authorised"
+            }
+            reason = rc_codes.get(rc, f"unknown code {rc}")
+            logger.error(f"❌ Failed to connect to MQTT broker: {reason} (rc={rc})")
+    
+    def on_disconnect(self, client, userdata, rc):
+        """Callback for MQTT disconnection"""
+        if rc == 0:
+            logger.info("🔌 Disconnected from MQTT broker cleanly")
+        else:
+            logger.warning(f"⚠️ Unexpected disconnect from MQTT broker (rc={rc}), will auto-reconnect...")
     
     def on_message(self, client, userdata, msg):
         """Process incoming MQTT messages with sensor data"""
@@ -100,52 +128,85 @@ class SensorDataCollector:
             topic = msg.topic
             payload = msg.payload.decode('utf-8')
             
+            logger.info(f"📨 MQTT message received | topic={topic} | payload={payload[:500]}")
+            
             # Skip non-JSON messages or system messages
             if '/bridge/' in topic or '/availability' in topic:
+                logger.debug(f"⏭ Skipping system topic: {topic}")
                 return
                 
             # Parse JSON data
             try:
                 sensor_data = json.loads(payload)
             except json.JSONDecodeError:
-                logger.debug(f"Non-JSON message on topic {topic}: {payload[:100]}")
+                logger.warning(f"⚠️ Non-JSON message on topic {topic}: {payload[:200]}")
                 return
+            
+            logger.info(f"📊 Parsed JSON from {topic}: keys={list(sensor_data.keys()) if isinstance(sensor_data, dict) else type(sensor_data).__name__}")
             
             # Check if message contains temperature data
             if isinstance(sensor_data, dict) and 'temperature' in sensor_data:
                 device_name = topic.split('/')[-1]  # Extract device name from topic
-                self.store_sensor_data(device_name, sensor_data)
+                self.store_sensor_data(topic, device_name, sensor_data)
+            else:
+                logger.info(f"ℹ️ Message on {topic} has no 'temperature' field - skipping storage")
                 
         except Exception as e:
             logger.error(f"Error processing MQTT message: {e}")
     
-    def store_sensor_data(self, device_name: str, data: Dict[Any, Any]):
+    def store_sensor_data(self, topic: str, device_name: str, data: Dict[Any, Any]):
         """Store sensor data in database"""
         try:
             cursor = self.db_connection.cursor()
             
             insert_sql = """
-            INSERT INTO sensor_data (
-                device_name, temperature, humidity, linkquality, 
-                max_temperature, temperature_unit, raw_data, timestamp
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO sensor_measurements (
+                device_name, topic, temperature, humidity, linkquality,
+                battery, max_temperature, min_temperature, temperature_sensitivity,
+                temperature_calibration, temperature_sampling, temperature_unit,
+                humidity_calibration, soil_moisture, soil_calibration, soil_sampling,
+                soil_warning, dry, raw_data, timestamp
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             
             # Extract sensor values
             temperature = data.get('temperature')
             humidity = data.get('humidity')
             linkquality = data.get('linkquality')
+            battery = data.get('battery')
             max_temperature = data.get('max_temperature')
-            temperature_unit = data.get('temperature_unit_convert', 'celsius')
+            min_temperature = data.get('min_temperature')
+            temperature_sensitivity = data.get('temperature_sensitivity')
+            temperature_calibration = data.get('temperature_calibration')
+            temperature_sampling = data.get('temperature_sampling')
+            temperature_unit = data.get('temperature_unit_convert', data.get('temperature_unit', 'celsius'))
+            humidity_calibration = data.get('humidity_calibration')
+            soil_moisture = data.get('soil_moisture')
+            soil_calibration = data.get('soil_calibration')
+            soil_sampling = data.get('soil_sampling')
+            soil_warning = data.get('soil_warning')
+            dry = data.get('dry')
             timestamp = datetime.utcnow()
             
             cursor.execute(insert_sql, (
                 device_name,
+                topic,
                 temperature,
                 humidity, 
                 linkquality,
+                battery,
                 max_temperature,
+                min_temperature,
+                temperature_sensitivity,
+                temperature_calibration,
+                temperature_sampling,
                 temperature_unit,
+                humidity_calibration,
+                soil_moisture,
+                soil_calibration,
+                soil_sampling,
+                soil_warning,
+                dry,
                 json.dumps(data),  # Store raw JSON data
                 timestamp
             ))
@@ -153,7 +214,9 @@ class SensorDataCollector:
             self.db_connection.commit()
             cursor.close()
             
-            logger.info(f"📊 Stored sensor data: {device_name} - {temperature}°C, {humidity}% humidity")
+            logger.info(
+                f"Stored sensor data: device={device_name} temp={temperature} humidity={humidity} soil={soil_moisture} battery={battery}"
+            )
             
         except Exception as e:
             logger.error(f"❌ Failed to store sensor data: {e}")
@@ -170,6 +233,10 @@ class SensorDataCollector:
             # Set callbacks
             self.mqtt_client.on_connect = self.on_connect
             self.mqtt_client.on_message = self.on_message
+            self.mqtt_client.on_disconnect = self.on_disconnect
+            
+            # Set username and password for MQTT broker authentication
+            self.mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
             
             # Connect to MQTT broker
             logger.info(f"🔌 Connecting to MQTT broker at {MQTT_BROKER}:{MQTT_PORT}")

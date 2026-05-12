@@ -3,6 +3,7 @@ from django.contrib import messages
 from django.utils import timezone
 from django.views.generic import ListView
 from django.http import JsonResponse
+from django.db import connection
 from django.db.models import Avg, Max, Min, Count, Q
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
@@ -544,6 +545,65 @@ def sensor_detail_view(request, device_name):
     return render(request, 'irrigation/sensor_detail.html', context)
 
 
+def _insert_sensor_measurement(reading_data, timestamp):
+    """Insert into TimescaleDB hypertable while keeping Django model compatibility."""
+    raw_payload = reading_data.get('raw_data') if isinstance(reading_data.get('raw_data'), dict) else {}
+
+    def pick(*keys, default=None):
+        for key in keys:
+            if key in reading_data and reading_data.get(key) is not None:
+                return reading_data.get(key)
+            if key in raw_payload and raw_payload.get(key) is not None:
+                return raw_payload.get(key)
+        return default
+
+    device_name = pick('device_name')
+    topic = pick('topic')
+    if not topic and device_name:
+        topic = f"zigbee2mqtt/{device_name}"
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO sensor_measurements (
+                device_name, topic, temperature, humidity, linkquality,
+                battery, max_temperature, min_temperature, temperature_sensitivity,
+                temperature_calibration, temperature_sampling, temperature_unit,
+                humidity_calibration, soil_moisture, soil_calibration, soil_sampling,
+                soil_warning, dry, raw_data, timestamp
+            ) VALUES (
+                %s, %s, %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s, %s, %s
+            )
+            """,
+            [
+                device_name,
+                topic,
+                pick('temperature'),
+                pick('humidity'),
+                pick('linkquality'),
+                pick('battery'),
+                pick('max_temperature'),
+                pick('min_temperature'),
+                pick('temperature_sensitivity'),
+                pick('temperature_calibration'),
+                pick('temperature_sampling'),
+                pick('temperature_unit', 'temperature_unit_convert', default='celsius'),
+                pick('humidity_calibration'),
+                pick('soil_moisture'),
+                pick('soil_calibration'),
+                pick('soil_sampling'),
+                pick('soil_warning'),
+                pick('dry'),
+                json.dumps(reading_data.get('raw_data')) if reading_data.get('raw_data') is not None else None,
+                timestamp,
+            ],
+        )
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def bulk_sensor_data_api(request):
@@ -571,8 +631,8 @@ def bulk_sensor_data_api(request):
                     if timestamp_str.endswith('Z'):
                         timestamp_str = timestamp_str[:-1] + '+00:00'
                     timestamp = datetime.fromisoformat(timestamp_str)
-                    if timezone.is_aware(timestamp):
-                        timestamp = timezone.make_naive(timestamp, timezone.utc)
+                    if timezone.is_naive(timestamp):
+                        timestamp = timezone.make_aware(timestamp, timezone.utc)
                 else:
                     timestamp = timezone.now()
                 
@@ -587,6 +647,9 @@ def bulk_sensor_data_api(request):
                     raw_data=reading_data.get('raw_data'),
                     timestamp=timestamp
                 )
+
+                # Also store in Timescale hypertable for Grafana time-series workloads.
+                _insert_sensor_measurement(reading_data, timestamp)
                 
                 saved_count += 1
                 

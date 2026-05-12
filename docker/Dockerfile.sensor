@@ -8,22 +8,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies
-COPY requirements.txt .
+COPY config/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install additional dependencies for sensor service
-RUN pip install paho-mqtt psycopg2-binary
+# Copy sensor data collector from source tree
+COPY src/sensor_data_collector.py .
 
-# Copy sensor data collector
-COPY sensor_data_collector.py .
-
-# Create entrypoint script
-RUN echo '#!/bin/bash\n\
-echo "🚀 Starting Sensor Data Collector..."\n\
-python sensor_data_collector.py' > /app/entrypoint.sh
-
-RUN chmod +x /app/entrypoint.sh
-
-EXPOSE 8002
-
-CMD ["/app/entrypoint.sh"]
+CMD ["python", "sensor_data_collector.py"]

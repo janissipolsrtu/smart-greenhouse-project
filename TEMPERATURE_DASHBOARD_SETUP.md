@@ -157,6 +157,43 @@ docker logs irrigation-django-webapp
 - **Auto-refresh** - Dashboard automatically updates with new sensor data
 - **Mobile responsive** - Works on desktop and mobile devices
 
+## Grafana with TimescaleDB
+
+The Docker Compose stack now includes Grafana and TimescaleDB-oriented storage.
+
+1. Open Grafana at http://localhost:3000
+2. Login with:
+   - Username: `admin`
+   - Password: `admin`
+3. Datasource `TimescaleDB` is provisioned automatically (no manual datasource setup required)
+4. Open dashboard folder `Irrigation` and select dashboard `Irrigation Sensor Overview`
+
+### Recommended SQL panels
+
+Use PostgreSQL query mode in Grafana and set time column alias to `time`.
+
+```sql
+SELECT
+  bucket AS time,
+  device_name,
+  avg_temperature
+FROM sensor_metrics_5m
+WHERE bucket BETWEEN $__timeFrom() AND $__timeTo()
+ORDER BY bucket;
+```
+
+```sql
+SELECT
+  timestamp AS time,
+  device_name,
+  humidity,
+  soil_moisture,
+  battery
+FROM sensor_measurements
+WHERE timestamp BETWEEN $__timeFrom() AND $__timeTo()
+ORDER BY timestamp;
+```
+
 ### Sensor Data Collection:
 The sensor service automatically:
 - Connects to your Raspberry Pi MQTT broker (192.168.8.151)

@@ -1,8 +1,9 @@
 services:
   # PostgreSQL Database
   postgres:
-    image: postgres:15-alpine
+    image: timescale/timescaledb:2.15.3-pg15
     container_name: irrigation-postgres
+    command: postgres -c shared_preload_libraries=timescaledb
     environment:
       - POSTGRES_DB=irrigation_db
       - POSTGRES_USER=irrigation_user
@@ -49,7 +50,7 @@ services:
     networks:
       - irrigation_network
     healthcheck:
-      test: ["CMD", "mosquitto_sub", "-h", "localhost", "-t", "$SYS/#", "-C", "1"]
+      test: ["CMD", "mosquitto_sub", "-h", "localhost", "-t", "$$SYS/#", "-C", "1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -129,6 +130,55 @@ services:
     volumes:
       - ../src:/app  # Mount source code
 
+  # MQTT -> PostgreSQL sensor ingestion service
+  sensor-data-collector:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.sensor
+    container_name: irrigation-sensor-data-collector
+    environment:
+      - MQTT_BROKER=192.168.8.151
+      - MQTT_PORT=1883
+      - MQTT_TOPIC=zigbee2mqtt/+
+      - MQTT_USERNAME=mosquitto_api_user1
+      - MQTT_PASSWORD=mosquitto_password$
+      - POSTGRES_HOST=postgres
+      - POSTGRES_DB=irrigation_db
+      - POSTGRES_USER=irrigation_user
+      - POSTGRES_PASSWORD=irrigation_pass
+      - POSTGRES_PORT=5432
+    networks:
+      - irrigation_network
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    volumes:
+      - ../src:/app
+
+  # Grafana for sensor dashboards
+  grafana:
+    image: grafana/grafana:11.1.4
+    container_name: irrigation-grafana
+    ports:
+      - "0.0.0.0:3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    networks:
+      - irrigation_network
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+
   # Celery Beat for periodic tasks
   celery-beat:
     build:
@@ -176,6 +226,8 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  grafana_data:
     driver: local
 
 networks:

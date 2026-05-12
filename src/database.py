@@ -83,6 +83,185 @@ def init_database():
                 logger.info("Added plan_id column to watering_cycle")
 
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_watering_cycle_plan_id ON watering_cycle (plan_id)"))
+
+            # Sensor data schema for time-series workloads and Grafana dashboards.
+            conn.execute(text(
+                """
+                CREATE TABLE IF NOT EXISTS sensor_data (
+                    id BIGSERIAL PRIMARY KEY,
+                    device_name VARCHAR(100) NOT NULL,
+                    topic VARCHAR(255),
+                    temperature DOUBLE PRECISION,
+                    humidity DOUBLE PRECISION,
+                    linkquality INTEGER,
+                    battery INTEGER,
+                    max_temperature DOUBLE PRECISION,
+                    min_temperature DOUBLE PRECISION,
+                    temperature_sensitivity DOUBLE PRECISION,
+                    temperature_calibration DOUBLE PRECISION,
+                    temperature_sampling INTEGER,
+                    temperature_unit VARCHAR(20),
+                    humidity_calibration DOUBLE PRECISION,
+                    soil_moisture DOUBLE PRECISION,
+                    soil_calibration DOUBLE PRECISION,
+                    soil_sampling INTEGER,
+                    soil_warning INTEGER,
+                    dry BOOLEAN,
+                    raw_data JSONB,
+                    timestamp TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            ))
+
+            # Ensure new columns exist for older deployments where sensor_data already exists.
+            conn.execute(text("ALTER TABLE sensor_data ADD COLUMN IF NOT EXISTS topic VARCHAR(255)"))
+            conn.execute(text("ALTER TABLE sensor_data ADD COLUMN IF NOT EXISTS battery INTEGER"))
+            conn.execute(text("ALTER TABLE sensor_data ADD COLUMN IF NOT EXISTS min_temperature DOUBLE PRECISION"))
+            conn.execute(text("ALTER TABLE sensor_data ADD COLUMN IF NOT EXISTS temperature_sensitivity DOUBLE PRECISION"))
+            conn.execute(text("ALTER TABLE sensor_data ADD COLUMN IF NOT EXISTS temperature_calibration DOUBLE PRECISION"))
+            conn.execute(text("ALTER TABLE sensor_data ADD COLUMN IF NOT EXISTS temperature_sampling INTEGER"))
+            conn.execute(text("ALTER TABLE sensor_data ADD COLUMN IF NOT EXISTS humidity_calibration DOUBLE PRECISION"))
+            conn.execute(text("ALTER TABLE sensor_data ADD COLUMN IF NOT EXISTS soil_moisture DOUBLE PRECISION"))
+            conn.execute(text("ALTER TABLE sensor_data ADD COLUMN IF NOT EXISTS soil_calibration DOUBLE PRECISION"))
+            conn.execute(text("ALTER TABLE sensor_data ADD COLUMN IF NOT EXISTS soil_sampling INTEGER"))
+            conn.execute(text("ALTER TABLE sensor_data ADD COLUMN IF NOT EXISTS soil_warning INTEGER"))
+            conn.execute(text("ALTER TABLE sensor_data ADD COLUMN IF NOT EXISTS dry BOOLEAN"))
+            conn.execute(text("ALTER TABLE sensor_data ADD COLUMN IF NOT EXISTS raw_data JSONB"))
+            conn.execute(text("ALTER TABLE sensor_data ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP"))
+
+            # Normalize older timestamp type if it was created without timezone.
+            conn.execute(text(
+                """
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1
+                        FROM information_schema.columns
+                        WHERE table_name = 'sensor_data'
+                          AND column_name = 'timestamp'
+                          AND data_type = 'timestamp without time zone'
+                    ) THEN
+                        ALTER TABLE sensor_data
+                        ALTER COLUMN timestamp TYPE TIMESTAMPTZ USING timestamp AT TIME ZONE 'UTC';
+                    END IF;
+                END $$;
+                """
+            ))
+
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_sensor_timestamp ON sensor_data(timestamp DESC)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_sensor_device_timestamp ON sensor_data(device_name, timestamp DESC)"))
+
+            # Dedicated time-series table for TimescaleDB/Grafana workloads.
+            conn.execute(text(
+                """
+                CREATE TABLE IF NOT EXISTS sensor_measurements (
+                    id BIGSERIAL,
+                    device_name VARCHAR(100) NOT NULL,
+                    topic VARCHAR(255),
+                    temperature DOUBLE PRECISION,
+                    humidity DOUBLE PRECISION,
+                    linkquality INTEGER,
+                    battery INTEGER,
+                    max_temperature DOUBLE PRECISION,
+                    min_temperature DOUBLE PRECISION,
+                    temperature_sensitivity DOUBLE PRECISION,
+                    temperature_calibration DOUBLE PRECISION,
+                    temperature_sampling INTEGER,
+                    temperature_unit VARCHAR(20),
+                    humidity_calibration DOUBLE PRECISION,
+                    soil_moisture DOUBLE PRECISION,
+                    soil_calibration DOUBLE PRECISION,
+                    soil_sampling INTEGER,
+                    soil_warning INTEGER,
+                    dry BOOLEAN,
+                    raw_data JSONB,
+                    timestamp TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            ))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_sensor_measurements_ts ON sensor_measurements(timestamp DESC)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS idx_sensor_measurements_device_ts ON sensor_measurements(device_name, timestamp DESC)"))
+            conn.execute(text(
+                """
+                DO $$
+                DECLARE
+                    pk_name text;
+                BEGIN
+                    SELECT conname INTO pk_name
+                    FROM pg_constraint
+                    WHERE conrelid = 'sensor_measurements'::regclass
+                      AND contype = 'p'
+                    LIMIT 1;
+
+                    IF pk_name IS NOT NULL THEN
+                        EXECUTE format('ALTER TABLE sensor_measurements DROP CONSTRAINT %I', pk_name);
+                    END IF;
+                END $$;
+                """
+            ))
+
+            # Convert to TimescaleDB hypertable when extension is available.
+            conn.execute(text(
+                """
+                DO $$
+                BEGIN
+                    IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'timescaledb') THEN
+                        CREATE EXTENSION IF NOT EXISTS timescaledb;
+                        PERFORM create_hypertable('sensor_measurements', by_range('timestamp'), if_not_exists => TRUE, migrate_data => TRUE);
+                    END IF;
+                EXCEPTION
+                    WHEN OTHERS THEN
+                        RAISE NOTICE 'TimescaleDB setup skipped: %', SQLERRM;
+                END $$;
+                """
+            ))
+
+            # Grafana-friendly view with bucketed aggregates.
+            conn.execute(text(
+                """
+                DO $$
+                BEGIN
+                    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'timescaledb') THEN
+                        EXECUTE '
+                            CREATE OR REPLACE VIEW sensor_metrics_5m AS
+                            SELECT
+                                time_bucket(INTERVAL ''5 minutes'', timestamp) AS bucket,
+                                device_name,
+                                AVG(temperature) AS avg_temperature,
+                                MIN(temperature) AS min_temperature,
+                                MAX(temperature) AS max_temperature,
+                                AVG(humidity) AS avg_humidity,
+                                AVG(soil_moisture) AS avg_soil_moisture,
+                                AVG(battery) AS avg_battery,
+                                COUNT(*) AS sample_count
+                            FROM sensor_measurements
+                            GROUP BY bucket, device_name
+                            ORDER BY bucket DESC
+                        ';
+                    ELSE
+                        EXECUTE '
+                            CREATE OR REPLACE VIEW sensor_metrics_5m AS
+                            SELECT
+                                date_trunc(''hour'', timestamp)
+                                    + (floor(date_part(''minute'', timestamp) / 5) * INTERVAL ''5 minutes'') AS bucket,
+                                device_name,
+                                AVG(temperature) AS avg_temperature,
+                                MIN(temperature) AS min_temperature,
+                                MAX(temperature) AS max_temperature,
+                                AVG(humidity) AS avg_humidity,
+                                AVG(soil_moisture) AS avg_soil_moisture,
+                                AVG(battery) AS avg_battery,
+                                COUNT(*) AS sample_count
+                            FROM sensor_measurements
+                            GROUP BY bucket, device_name
+                            ORDER BY bucket DESC
+                        ';
+                    END IF;
+                END $$;
+                """
+            ))
         logger.info("Database initialized successfully")
         return True
     except Exception as e:
