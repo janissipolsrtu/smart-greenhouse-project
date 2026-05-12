@@ -338,6 +338,45 @@
                 {% endif %}
             </div>
         </div>
+
+        <div class="card mt-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-broadcast-tower me-2"></i>Šobrīdējie sensoru rādījumi
+                </h6>
+                <a href="{% url 'irrigation:sensor_dashboard' %}" class="small text-decoration-none">
+                    Skatīt visus
+                </a>
+            </div>
+            <div class="card-body py-2">
+                {% if dashboard_sensor_snippet %}
+                    {% for sensor in dashboard_sensor_snippet %}
+                    <div class="py-2 {% if not forloop.last %}border-bottom{% endif %}">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="small fw-bold">{{ sensor.device_label }}</div>
+                                <div class="text-muted" style="font-size: 0.75rem;">{{ sensor.device_name }}</div>
+                            </div>
+                            <div class="text-end">
+                                <div class="small fw-bold">{{ sensor.temperature|default:'--' }}°C</div>
+                                <div class="text-muted" style="font-size: 0.75rem;">{{ sensor.humidity|default:'--' }}%</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                    <div class="pt-2 text-end">
+                        <a href="{% url 'irrigation:sensor_dashboard' %}" class="btn btn-sm btn-outline-warning">
+                            <i class="fas fa-chart-line me-1"></i>Sensoru dati
+                        </a>
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-2">
+                        <div class="small">Nav pieejamu sensoru datu</div>
+                        <a href="{% url 'irrigation:sensor_dashboard' %}" class="small text-decoration-none">Atvērt sensoru lapu</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
         
         <!-- Quick Actions -->
         <div class="card mt-3">
@@ -357,7 +396,7 @@
                     <a href="{% url 'irrigation:cycle_list' %}" class="btn btn-outline-secondary">
                         <i class="fas fa-list me-2"></i>Skatīt laisīšanas reizes
                     </a>
-                    <a href="{% url 'irrigation:temperature_dashboard' %}" class="btn btn-outline-warning">
+                    <a href="{% url 'irrigation:sensor_dashboard' %}" class="btn btn-outline-warning">
                         <i class="fas fa-thermometer-half me-2"></i>Temperatūras pārskats
                     </a>
                     <a href="http://localhost:5555" target="_blank" class="btn btn-outline-info">

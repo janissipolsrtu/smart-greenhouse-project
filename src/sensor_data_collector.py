@@ -169,24 +169,38 @@ class SensorDataCollector:
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             
-            # Extract sensor values
-            temperature = data.get('temperature')
-            humidity = data.get('humidity')
-            linkquality = data.get('linkquality')
-            battery = data.get('battery')
-            max_temperature = data.get('max_temperature')
-            min_temperature = data.get('min_temperature')
-            temperature_sensitivity = data.get('temperature_sensitivity')
-            temperature_calibration = data.get('temperature_calibration')
-            temperature_sampling = data.get('temperature_sampling')
-            temperature_unit = data.get('temperature_unit_convert', data.get('temperature_unit', 'celsius'))
-            humidity_calibration = data.get('humidity_calibration')
-            soil_moisture = data.get('soil_moisture')
-            soil_calibration = data.get('soil_calibration')
-            soil_sampling = data.get('soil_sampling')
-            soil_warning = data.get('soil_warning')
-            dry = data.get('dry')
+            # Missing keys intentionally map to None so DB reflects real payload shape.
+            temperature = data.get('temperature', None)
+            humidity = data.get('humidity', None)
+            linkquality = data.get('linkquality', None)
+            battery = data.get('battery', None)
+            max_temperature = data.get('max_temperature', None)
+            min_temperature = data.get('min_temperature', None)
+            temperature_sensitivity = data.get('temperature_sensitivity', None)
+            temperature_calibration = data.get('temperature_calibration', None)
+            temperature_sampling = data.get('temperature_sampling', None)
+            temperature_unit = data.get('temperature_unit_convert', data.get('temperature_unit', None))
+            humidity_calibration = data.get('humidity_calibration', None)
+            soil_moisture = data.get('soil_moisture', None)
+            soil_calibration = data.get('soil_calibration', None)
+            soil_sampling = data.get('soil_sampling', None)
+            soil_warning = data.get('soil_warning', None)
+            dry = data.get('dry', None)
             timestamp = datetime.utcnow()
+
+            expected_payload_keys = [
+                'temperature', 'humidity', 'linkquality', 'battery',
+                'max_temperature', 'min_temperature', 'temperature_sensitivity',
+                'temperature_calibration', 'temperature_sampling',
+                'temperature_unit', 'temperature_unit_convert',
+                'humidity_calibration', 'soil_moisture', 'soil_calibration',
+                'soil_sampling', 'soil_warning', 'dry'
+            ]
+            missing_keys = [key for key in expected_payload_keys if key not in data]
+            if missing_keys:
+                logger.info(
+                    f"🧩 Payload key audit: device={device_name} missing_keys={missing_keys}"
+                )
             
             cursor.execute(insert_sql, (
                 device_name,

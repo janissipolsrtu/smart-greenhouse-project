@@ -1,4 +1,5 @@
 from django.urls import path
+from django.views.generic.base import RedirectView
 from . import views
 
 app_name = 'irrigation'
@@ -18,9 +19,13 @@ urlpatterns = [
     path('watering/cycles/<str:cycle_id>/delete/', views.delete_cycle_view, name='delete_cycle'),
     path('status/', views.system_status_view, name='system_status'),
     
-    # Temperature Dashboard URLs
-    path('temperature/', views.temperature_dashboard_view, name='temperature_dashboard'),
-    path('temperature/<str:device_name>/', views.sensor_detail_view, name='sensor_detail'),
+    # Sensor data dashboard URLs
+    path('sensor-data/', views.temperature_dashboard_view, name='sensor_dashboard'),
+    path('sensor-data/<str:device_name>/', views.sensor_detail_view, name='sensor_detail'),
+
+    # Backward-compatible redirects from old routes
+    path('temperature/', RedirectView.as_view(pattern_name='irrigation:sensor_dashboard', permanent=True)),
+    path('temperature/<str:device_name>/', RedirectView.as_view(pattern_name='irrigation:sensor_detail', permanent=True)),
     
     # Plant Management URLs
     path('plants/', views.plant_dashboard_view, name='plant_dashboard'),

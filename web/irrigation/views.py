@@ -58,6 +58,62 @@ def dashboard_view(request):
         scheduled_time__lt=now,
         status='pending'
     ).count()
+
+    # Compact latest sensor snippet for dashboard sidebar.
+    dashboard_sensor_snippet = []
+    greenhouse_devices = Device.objects.none()
+    if active_greenhouse:
+        greenhouse_devices = Device.objects.filter(greenhouse=active_greenhouse, active=True).exclude(
+            name__iexact='Laistīšanas vārsts'
+        ).exclude(
+            device_type='irrigation_controller'
+        ).order_by('name')
+
+    sensor_identifiers = []
+    if greenhouse_devices.exists():
+        sensor_identifiers = list(greenhouse_devices.values_list('zigbee_id', flat=True)) + list(greenhouse_devices.values_list('name', flat=True))
+
+    with connection.cursor() as cursor:
+        if sensor_identifiers:
+            cursor.execute(
+                """
+                SELECT DISTINCT ON (device_name)
+                    device_name, temperature, humidity, soil_moisture, linkquality, battery, timestamp
+                FROM sensor_measurements
+                WHERE device_name = ANY(%s)
+                ORDER BY device_name, timestamp DESC
+                """,
+                [sensor_identifiers],
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT DISTINCT ON (device_name)
+                    device_name, temperature, humidity, soil_moisture, linkquality, battery, timestamp
+                FROM sensor_measurements
+                ORDER BY device_name, timestamp DESC
+                LIMIT 5
+                """
+            )
+
+        latest_sensor_rows = cursor.fetchall()
+
+    name_map = {str(device.zigbee_id): device.name for device in greenhouse_devices}
+    for row in latest_sensor_rows:
+        device_name, temperature, humidity, soil_moisture, linkquality, battery, timestamp = row
+        dashboard_sensor_snippet.append({
+            'device_name': device_name,
+            'device_label': name_map.get(str(device_name), str(device_name)),
+            'temperature': temperature,
+            'humidity': humidity,
+            'soil_moisture': soil_moisture,
+            'linkquality': linkquality,
+            'battery': battery,
+            'timestamp': timestamp,
+        })
+
+    dashboard_sensor_snippet.sort(key=lambda item: item['timestamp'] or timezone.datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    dashboard_sensor_snippet = dashboard_sensor_snippet[:3]
     
     # Generate greenhouse layout grid using the same persisted size as layout page
     if active_greenhouse:
@@ -142,6 +198,7 @@ def dashboard_view(request):
         'max_columns': max_columns,
         'row_range': range(1, max_rows + 1),
         'column_range': range(1, max_columns + 1),
+        'dashboard_sensor_snippet': dashboard_sensor_snippet,
     }
 
     return render(request, 'irrigation/dashboard.html', context)
@@ -424,27 +481,252 @@ def system_status_view(request):
 def temperature_dashboard_view(request):
     """Temperature sensor dashboard view"""
     now = timezone.now()
-    
-    # Get the latest sensor data for each device
+    active_greenhouse = GreenhouseConfig.get_config()
+    soil_sensor_id = '0xa4c138a5cfe7b9f0'
+
+    def reading_value(reading, key):
+        if not reading:
+            return None
+        if isinstance(reading, dict):
+            return reading.get(key)
+        return getattr(reading, key, None)
+
+    def unique_identifiers(values):
+        return [value for value in dict.fromkeys(values) if value]
+
+    def choose_latest_record(orm_record, measurement_record):
+        orm_ts = reading_value(orm_record, 'timestamp')
+        measurement_ts = reading_value(measurement_record, 'timestamp')
+        if measurement_record and (not orm_record or (measurement_ts and orm_ts and measurement_ts > orm_ts) or (measurement_ts and not orm_ts)):
+            return measurement_record
+        return orm_record
+
+    def merge_temperature_stats(orm_stats, measurement_stats):
+        max_values = [value for value in [
+            orm_stats.get('sensor_max_temperature') if orm_stats else None,
+            measurement_stats.get('sensor_max_temperature') if measurement_stats else None,
+        ] if value is not None]
+        min_values = [value for value in [
+            orm_stats.get('sensor_min_temperature') if orm_stats else None,
+            measurement_stats.get('sensor_min_temperature') if measurement_stats else None,
+        ] if value is not None]
+        return {
+            'sensor_max_temperature': max(max_values) if max_values else None,
+            'sensor_min_temperature': min(min_values) if min_values else None,
+        }
+
+    def build_sensor_payload(latest_reading, raw_payload):
+        raw_payload = raw_payload if isinstance(raw_payload, dict) else {}
+
+        temperature_value = reading_value(latest_reading, 'temperature') if reading_value(latest_reading, 'temperature') is not None else raw_payload.get('temperature')
+        humidity_value = reading_value(latest_reading, 'humidity') if reading_value(latest_reading, 'humidity') is not None else raw_payload.get('humidity')
+        linkquality_value = reading_value(latest_reading, 'linkquality') if reading_value(latest_reading, 'linkquality') is not None else raw_payload.get('linkquality')
+
+        return {
+            'temperature': temperature_value,
+            'humidity': humidity_value,
+            'linkquality': linkquality_value,
+            'battery': reading_value(latest_reading, 'battery') if reading_value(latest_reading, 'battery') is not None else raw_payload.get('battery'),
+            'soil_moisture': raw_payload.get('soil_moisture'),
+            'temperature_unit': raw_payload.get('temperature_unit', 'celsius'),
+            'temperature_unit_convert': raw_payload.get('temperature_unit_convert', 'celsius'),
+        }
+
+    def fetch_latest_measurement(device_identifiers):
+        identifiers = [identifier for identifier in device_identifiers if identifier]
+        if not identifiers:
+            return None
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT device_name, temperature, humidity, linkquality, battery,
+                       soil_moisture, max_temperature, min_temperature,
+                       temperature_unit, raw_data, timestamp
+                FROM sensor_measurements
+                WHERE device_name = ANY(%s)
+                ORDER BY timestamp DESC
+                LIMIT 1
+                """,
+                [identifiers],
+            )
+            row = cursor.fetchone()
+
+        if not row:
+            return None
+
+        return {
+            'device_name': row[0],
+            'temperature': row[1],
+            'humidity': row[2],
+            'linkquality': row[3],
+            'battery': row[4],
+            'soil_moisture': row[5],
+            'max_temperature': row[6],
+            'min_temperature': row[7],
+            'temperature_unit': row[8],
+            'raw_data': row[9],
+            'timestamp': row[10],
+            'formatted_timestamp': row[10].strftime('%Y-%m-%d %H:%M:%S') if row[10] else None,
+        }
+
+    def fetch_measurement_stats(device_identifiers):
+        identifiers = [identifier for identifier in device_identifiers if identifier]
+        if not identifiers:
+            return {'sensor_max_temperature': None, 'sensor_min_temperature': None}
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT MAX(temperature) AS sensor_max_temperature,
+                       MIN(temperature) AS sensor_min_temperature
+                FROM sensor_measurements
+                WHERE device_name = ANY(%s)
+                """,
+                [identifiers],
+            )
+            row = cursor.fetchone()
+
+        return {
+            'sensor_max_temperature': row[0] if row else None,
+            'sensor_min_temperature': row[1] if row else None,
+        }
+
+    greenhouse_devices = Device.objects.none()
+    sensor_query = SensorData.objects.all()
+
+    if active_greenhouse:
+        greenhouse_devices = Device.objects.filter(greenhouse=active_greenhouse, active=True).exclude(
+            name__iexact='Laistīšanas vārsts'
+        ).exclude(
+            device_type='irrigation_controller'
+        ).order_by('name')
+        device_ids = list(greenhouse_devices.values_list('zigbee_id', flat=True))
+        device_names = list(greenhouse_devices.values_list('name', flat=True))
+        if device_ids or device_names:
+            sensor_query = SensorData.objects.filter(
+                Q(device_name__in=device_ids) | Q(device_name__in=device_names)
+            )
+
+    # Build latest readings per selected greenhouse sensor device.
     latest_readings = []
-    device_names = SensorData.objects.values_list('device_name', flat=True).distinct()
-    
-    for device_name in device_names:
-        latest = SensorData.objects.filter(device_name=device_name).order_by('-timestamp').first()
-        if latest:
-            latest_readings.append(latest)
+    if greenhouse_devices.exists():
+        for device in greenhouse_devices:
+            device_identifiers = unique_identifiers([device.zigbee_id, device.name])
+            device_readings = sensor_query.filter(
+                Q(device_name=device.zigbee_id) | Q(device_name=device.name)
+            )
+            latest = device_readings.order_by('-timestamp').first()
+            latest_fallback = fetch_latest_measurement(device_identifiers)
+
+            orm_stats = device_readings.aggregate(
+                sensor_max_temperature=Max('temperature'),
+                sensor_min_temperature=Min('temperature')
+            )
+            measurement_stats = fetch_measurement_stats(device_identifiers)
+            device_stats = merge_temperature_stats(orm_stats, measurement_stats)
+
+            latest_record = choose_latest_record(latest, latest_fallback)
+            raw_data = reading_value(latest_record, 'raw_data') if isinstance(reading_value(latest_record, 'raw_data'), dict) else {}
+            payload_fields = build_sensor_payload(latest_record, raw_data)
+            is_soil_sensor = str(device.zigbee_id).lower() == soil_sensor_id
+            latest_readings.append({
+                'device_name': device.zigbee_id,
+                'device_label': device.name,
+                'device_type': device.device_type,
+                'reading': latest_record,
+                'temperature': payload_fields.get('temperature'),
+                'humidity': payload_fields.get('humidity'),
+                'linkquality': payload_fields.get('linkquality'),
+                'battery': payload_fields.get('battery'),
+                'soil_moisture': payload_fields.get('soil_moisture') if is_soil_sensor else None,
+                'temperature_unit': payload_fields.get('temperature_unit') if is_soil_sensor else payload_fields.get('temperature_unit_convert'),
+                'latest_max_temperature': raw_data.get('max_temperature', reading_value(latest_record, 'max_temperature')),
+                'latest_min_temperature': raw_data.get('min_temperature', reading_value(latest_record, 'min_temperature')),
+                'sensor_max_temperature': device_stats.get('sensor_max_temperature'),
+                'sensor_min_temperature': device_stats.get('sensor_min_temperature'),
+            })
+    else:
+        # Fallback for setups without registered greenhouse devices.
+        orm_device_names = set(sensor_query.values_list('device_name', flat=True).distinct())
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT DISTINCT device_name FROM sensor_measurements")
+            measurement_device_names = {row[0] for row in cursor.fetchall() if row and row[0]}
+
+        for device_name in sorted(orm_device_names.union(measurement_device_names)):
+            if str(device_name).strip().lower() == 'laistīšanas vārsts':
+                continue
+            latest = sensor_query.filter(device_name=device_name).order_by('-timestamp').first()
+            latest_fallback = fetch_latest_measurement([device_name])
+
+            orm_stats = sensor_query.filter(device_name=device_name).aggregate(
+                sensor_max_temperature=Max('temperature'),
+                sensor_min_temperature=Min('temperature')
+            )
+            measurement_stats = fetch_measurement_stats([device_name])
+            device_stats = merge_temperature_stats(orm_stats, measurement_stats)
+
+            latest_record = choose_latest_record(latest, latest_fallback)
+            raw_data = reading_value(latest_record, 'raw_data') if isinstance(reading_value(latest_record, 'raw_data'), dict) else {}
+            payload_fields = build_sensor_payload(latest_record, raw_data)
+            is_soil_sensor = str(device_name).lower() == soil_sensor_id
+            latest_readings.append({
+                'device_name': device_name,
+                'device_label': device_name,
+                'device_type': 'other',
+                'reading': latest_record,
+                'temperature': payload_fields.get('temperature'),
+                'humidity': payload_fields.get('humidity'),
+                'linkquality': payload_fields.get('linkquality'),
+                'battery': payload_fields.get('battery'),
+                'soil_moisture': payload_fields.get('soil_moisture') if is_soil_sensor else None,
+                'temperature_unit': payload_fields.get('temperature_unit') if is_soil_sensor else payload_fields.get('temperature_unit_convert'),
+                'latest_max_temperature': raw_data.get('max_temperature', reading_value(latest_record, 'max_temperature')),
+                'latest_min_temperature': raw_data.get('min_temperature', reading_value(latest_record, 'min_temperature')),
+                'sensor_max_temperature': device_stats.get('sensor_max_temperature'),
+                'sensor_min_temperature': device_stats.get('sensor_min_temperature'),
+            })
     
     # Get statistics for the last 24 hours
     twenty_four_hours_ago = now - timezone.timedelta(hours=24)
-    recent_data = SensorData.objects.filter(timestamp__gte=twenty_four_hours_ago)
+    recent_data = sensor_query.filter(timestamp__gte=twenty_four_hours_ago)
     
     stats = recent_data.aggregate(
-        avg_temperature=Avg('temperature'),
         max_temperature=Max('temperature'),
         min_temperature=Min('temperature'),
-        avg_humidity=Avg('humidity'),
         total_readings=Count('id')
     )
+    measurement_identifiers = []
+    if active_greenhouse and greenhouse_devices.exists():
+        measurement_identifiers = unique_identifiers(
+            list(greenhouse_devices.values_list('zigbee_id', flat=True)) +
+            list(greenhouse_devices.values_list('name', flat=True))
+        )
+
+    with connection.cursor() as cursor:
+        if measurement_identifiers:
+            cursor.execute(
+                """
+                SELECT MAX(temperature), MIN(temperature), COUNT(*)
+                FROM sensor_measurements
+                WHERE timestamp >= %s AND device_name = ANY(%s)
+                """,
+                [twenty_four_hours_ago, measurement_identifiers],
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT MAX(temperature), MIN(temperature), COUNT(*)
+                FROM sensor_measurements
+                WHERE timestamp >= %s
+                """,
+                [twenty_four_hours_ago],
+            )
+        measurement_stats = cursor.fetchone()
+
+    stats = {
+        'max_temperature': measurement_stats[0] if measurement_stats else stats.get('max_temperature'),
+        'min_temperature': measurement_stats[1] if measurement_stats else stats.get('min_temperature'),
+        'total_readings': measurement_stats[2] if measurement_stats else stats.get('total_readings', 0),
+    }
     
     # Get hourly averages for the last 24 hours for charting
     hourly_data = []
@@ -452,13 +734,31 @@ def temperature_dashboard_view(request):
         hour_start = now - timezone.timedelta(hours=hour+1)
         hour_end = now - timezone.timedelta(hours=hour)
         
-        hour_avg = SensorData.objects.filter(
-            timestamp__gte=hour_start,
-            timestamp__lt=hour_end
-        ).aggregate(
-            avg_temp=Avg('temperature'),
-            avg_humidity=Avg('humidity')
-        )
+        with connection.cursor() as cursor:
+            if measurement_identifiers:
+                cursor.execute(
+                    """
+                    SELECT AVG(temperature), AVG(humidity)
+                    FROM sensor_measurements
+                    WHERE timestamp >= %s AND timestamp < %s AND device_name = ANY(%s)
+                    """,
+                    [hour_start, hour_end, measurement_identifiers],
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT AVG(temperature), AVG(humidity)
+                    FROM sensor_measurements
+                    WHERE timestamp >= %s AND timestamp < %s
+                    """,
+                    [hour_start, hour_end],
+                )
+            measurement_hour_avg = cursor.fetchone()
+
+        hour_avg = {
+            'avg_temp': measurement_hour_avg[0] if measurement_hour_avg else None,
+            'avg_humidity': measurement_hour_avg[1] if measurement_hour_avg else None,
+        }
         
         hourly_data.append({
             'hour': hour_start.strftime('%H:%M'),
@@ -474,7 +774,8 @@ def temperature_dashboard_view(request):
         'stats': stats,
         'hourly_data': hourly_data,
         'current_time': now,
-        'device_count': len(latest_readings)
+        'device_count': len(latest_readings),
+        'active_greenhouse': active_greenhouse,
     }
     
     return render(request, 'irrigation/temperature_dashboard.html', context)
@@ -507,36 +808,117 @@ def sensor_data_api(request):
 
 def sensor_detail_view(request, device_name):
     """Detailed view for a specific sensor device"""
-    # Get latest reading
-    latest_reading = SensorData.objects.filter(device_name=device_name).order_by('-timestamp').first()
-    
-    if not latest_reading:
+    def _normalize_row(row):
+        row = row or {}
+        ts = row.get('timestamp')
+        temperature = row.get('temperature')
+        raw_data = row.get('raw_data') if isinstance(row.get('raw_data'), dict) else {}
+        return {
+            'device_name': row.get('device_name'),
+            'temperature': temperature,
+            'humidity': row.get('humidity'),
+            'linkquality': row.get('linkquality'),
+            'max_temperature': row.get('max_temperature'),
+            'temperature_unit': row.get('temperature_unit') or raw_data.get('temperature_unit') or raw_data.get('temperature_unit_convert') or 'celsius',
+            'raw_data': raw_data,
+            'timestamp': ts,
+            'formatted_timestamp': ts.strftime('%Y-%m-%d %H:%M:%S') if ts else None,
+            'temperature_fahrenheit': ((float(temperature) * 9 / 5) + 32) if temperature is not None else None,
+            'get_raw_data_pretty': json.dumps(raw_data, indent=2) if raw_data else '',
+        }
+
+    def _resolve_identifiers(initial_name):
+        identifiers = [initial_name]
+        device_match = Device.objects.filter(Q(zigbee_id=initial_name) | Q(name=initial_name)).first()
+        if device_match:
+            identifiers.extend([device_match.zigbee_id, device_match.name])
+        # Keep order and remove empties/duplicates
+        return [value for value in dict.fromkeys(identifiers) if value]
+
+    identifiers = _resolve_identifiers(device_name)
+
+    # Load latest and recent readings from Timescale measurements table.
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT device_name, temperature, humidity, linkquality, max_temperature,
+                   temperature_unit, raw_data, timestamp
+            FROM sensor_measurements
+            WHERE device_name = ANY(%s)
+            ORDER BY timestamp DESC
+            LIMIT 1
+            """,
+            [identifiers],
+        )
+        latest_row = cursor.fetchone()
+
+        cursor.execute(
+            """
+            SELECT device_name, temperature, humidity, linkquality, max_temperature,
+                   temperature_unit, raw_data, timestamp
+            FROM sensor_measurements
+            WHERE device_name = ANY(%s)
+              AND timestamp >= NOW() - INTERVAL '7 days'
+            ORDER BY timestamp DESC
+            LIMIT 100
+            """,
+            [identifiers],
+        )
+        recent_rows = cursor.fetchall()
+
+        cursor.execute(
+            """
+            SELECT AVG(temperature), MAX(temperature), MIN(temperature),
+                   AVG(humidity), MAX(humidity), MIN(humidity), COUNT(*)
+            FROM sensor_measurements
+            WHERE device_name = ANY(%s)
+              AND timestamp >= NOW() - INTERVAL '7 days'
+            """,
+            [identifiers],
+        )
+        stats_row = cursor.fetchone()
+
+    if not latest_row:
         messages.error(request, f'Dati nav atrasti ierīcei: {device_name}')
-        return redirect('irrigation:temperature_dashboard')
-    
-    # Get readings for the last 7 days
-    week_ago = timezone.now() - timezone.timedelta(days=7)
-    readings = SensorData.objects.filter(
-        device_name=device_name,
-        timestamp__gte=week_ago
-    ).order_by('-timestamp')[:100]  # Limit to 100 most recent
-    
-    # Calculate statistics
-    stats = SensorData.objects.filter(
-        device_name=device_name,
-        timestamp__gte=week_ago
-    ).aggregate(
-        avg_temperature=Avg('temperature'),
-        max_temperature=Max('temperature'),
-        min_temperature=Min('temperature'),
-        avg_humidity=Avg('humidity'),
-        max_humidity=Max('humidity'),
-        min_humidity=Min('humidity'),
-        total_readings=Count('id')
-    )
+        return redirect('irrigation:sensor_dashboard')
+
+    latest_reading = _normalize_row({
+        'device_name': latest_row[0],
+        'temperature': latest_row[1],
+        'humidity': latest_row[2],
+        'linkquality': latest_row[3],
+        'max_temperature': latest_row[4],
+        'temperature_unit': latest_row[5],
+        'raw_data': latest_row[6],
+        'timestamp': latest_row[7],
+    })
+
+    readings = [
+        _normalize_row({
+            'device_name': row[0],
+            'temperature': row[1],
+            'humidity': row[2],
+            'linkquality': row[3],
+            'max_temperature': row[4],
+            'temperature_unit': row[5],
+            'raw_data': row[6],
+            'timestamp': row[7],
+        })
+        for row in recent_rows
+    ]
+
+    stats = {
+        'avg_temperature': stats_row[0] if stats_row else None,
+        'max_temperature': stats_row[1] if stats_row else None,
+        'min_temperature': stats_row[2] if stats_row else None,
+        'avg_humidity': stats_row[3] if stats_row else None,
+        'max_humidity': stats_row[4] if stats_row else None,
+        'min_humidity': stats_row[5] if stats_row else None,
+        'total_readings': stats_row[6] if stats_row else 0,
+    }
     
     context = {
-        'device_name': device_name,
+        'device_name': latest_reading.get('device_name') or device_name,
         'latest_reading': latest_reading,
         'recent_readings': readings,
         'stats': stats,
