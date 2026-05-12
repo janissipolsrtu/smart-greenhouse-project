@@ -24,6 +24,20 @@
   {% endfor %}
 {% endif %}
 
+{% if is_first_setup %}
+  <div class="alert alert-info d-flex align-items-start">
+    <i class="fas fa-lightbulb fa-lg me-3 mt-1"></i>
+    <div>
+      <strong>Sākotnējā iestatīšana:</strong>
+      <ol class="mb-0 mt-2 small">
+        <li>Pievienojiet siltumnīcu un ieslēdziet vajadzīgos moduļus.</li>
+        <li>Norādiet savienojuma parametrus (IP, lietotājs, parole).</li>
+        <li>Savienojiet sensorus ar “Sākt pairing” un saglabājiet ierīces.</li>
+      </ol>
+    </div>
+  </div>
+{% endif %}
+
 {% if not greenhouses %}
   <div class="alert alert-warning d-flex align-items-center">
     <i class="fas fa-exclamation-triangle fa-lg me-3"></i>
@@ -59,6 +73,14 @@
           <dd class="col-sm-8">{{ gh.controller_username|default:"—" }}</dd>
           <dt class="col-sm-4 text-muted">Parole</dt>
           <dd class="col-sm-8">{% if gh.controller_password %}••••••••{% else %}—{% endif %}</dd>
+          <dt class="col-sm-4 text-muted">Moduļi</dt>
+          <dd class="col-sm-8">
+            <span class="badge {% if gh.feature_plants %}bg-success{% else %}bg-secondary{% endif %}">Augi</span>
+            <span class="badge {% if gh.feature_layout %}bg-success{% else %}bg-secondary{% endif %}">Izkārtojums</span>
+            <span class="badge {% if gh.feature_meteostation %}bg-success{% else %}bg-secondary{% endif %}">Meteostacija</span>
+            <span class="badge {% if gh.feature_watering_liters %}bg-success{% else %}bg-secondary{% endif %}">Laistīšana litros</span>
+            <span class="badge {% if gh.feature_smart_suggestions %}bg-success{% else %}bg-secondary{% endif %}">Gudrie ieteikumi</span>
+          </dd>
           <dt class="col-sm-4 text-muted">MQTT statuss</dt>
           <dd class="col-sm-8">
             <span class="badge bg-secondary mqtt-state-badge" id="mqtt-state-{{ gh.pk }}" data-greenhouse-id="{{ gh.pk }}">
@@ -160,7 +182,7 @@
       </div>
       <div class="card-footer d-flex gap-2">
         <button class="btn btn-sm btn-outline-secondary"
-                onclick="openEditModal({{ gh.pk }}, '{{ gh.name|escapejs }}', '{{ gh.location|escapejs }}', '{{ gh.season|escapejs }}')">
+          onclick="openEditModal({{ gh.pk }}, '{{ gh.name|escapejs }}', '{{ gh.location|escapejs }}', '{{ gh.season|escapejs }}', {{ gh.feature_plants|yesno:'true,false' }}, {{ gh.feature_layout|yesno:'true,false' }}, {{ gh.feature_meteostation|yesno:'true,false' }}, {{ gh.feature_watering_liters|yesno:'true,false' }}, {{ gh.feature_smart_suggestions|yesno:'true,false' }})">
           <i class="fas fa-edit me-1"></i>Rediģēt
         </button>
         <button class="btn btn-sm btn-outline-secondary"
@@ -207,6 +229,29 @@
             <label class="form-label">Sezona</label>
             <input type="text" name="season" class="form-control" placeholder="piem., Pavasaris 2026">
           </div>
+          <div class="mb-2">
+            <label class="form-label">Funkciju iestatījumi</label>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="feature_plants" id="add-feature-plants" checked>
+              <label class="form-check-label" for="add-feature-plants">Augu modulis</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="feature_layout" id="add-feature-layout" checked>
+              <label class="form-check-label" for="add-feature-layout">Siltumnīcas izkārtojums</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="feature_meteostation" id="add-feature-meteostation">
+              <label class="form-check-label" for="add-feature-meteostation">Dati no meteostacijas</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="feature_watering_liters" id="add-feature-watering-liters">
+              <label class="form-check-label" for="add-feature-watering-liters">Laistīšana litros</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="feature_smart_suggestions" id="add-feature-smart-suggestions">
+              <label class="form-check-label" for="add-feature-smart-suggestions">Gudrie ieteikumi</label>
+            </div>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Atcelt</button>
@@ -240,6 +285,29 @@
           <div class="mb-3">
             <label class="form-label">Sezona</label>
             <input type="text" name="season" id="edit-gh-season" class="form-control" placeholder="piem., Pavasaris 2026">
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Funkciju iestatījumi</label>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="feature_plants" id="edit-feature-plants">
+              <label class="form-check-label" for="edit-feature-plants">Augu modulis</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="feature_layout" id="edit-feature-layout">
+              <label class="form-check-label" for="edit-feature-layout">Siltumnīcas izkārtojums</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="feature_meteostation" id="edit-feature-meteostation">
+              <label class="form-check-label" for="edit-feature-meteostation">Dati no meteostacijas</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="feature_watering_liters" id="edit-feature-watering-liters">
+              <label class="form-check-label" for="edit-feature-watering-liters">Laistīšana litros</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="feature_smart_suggestions" id="edit-feature-smart-suggestions">
+              <label class="form-check-label" for="edit-feature-smart-suggestions">Gudrie ieteikumi</label>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
@@ -296,11 +364,16 @@
 {% block scripts %}
 <script>
 // ── Greenhouse edit / controller modals ────────────────────────────────────
-function openEditModal(id, name, location, season) {
+function openEditModal(id, name, location, season, featurePlants, featureLayout, featureMeteostation, featureWateringLiters, featureSmartSuggestions) {
   document.getElementById('edit-gh-id').value = id;
   document.getElementById('edit-gh-name').value = name;
   document.getElementById('edit-gh-location').value = location;
   document.getElementById('edit-gh-season').value = season;
+  document.getElementById('edit-feature-plants').checked = Boolean(featurePlants);
+  document.getElementById('edit-feature-layout').checked = Boolean(featureLayout);
+  document.getElementById('edit-feature-meteostation').checked = Boolean(featureMeteostation);
+  document.getElementById('edit-feature-watering-liters').checked = Boolean(featureWateringLiters);
+  document.getElementById('edit-feature-smart-suggestions').checked = Boolean(featureSmartSuggestions);
   new bootstrap.Modal(document.getElementById('editGreenhouseModal')).show();
 }
 

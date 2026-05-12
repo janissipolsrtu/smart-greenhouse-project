@@ -1189,12 +1189,30 @@ def health_check_api(request):
 
 # =================== PLANT MANAGEMENT VIEWS ===================
 
+def _feature_enabled(feature_name, default=True):
+    """Return active greenhouse feature state with a safe default."""
+    active_greenhouse = GreenhouseConfig.get_config()
+    if not active_greenhouse:
+        return default
+    return bool(getattr(active_greenhouse, feature_name, default))
+
+
+def _redirect_feature_disabled(request, feature_title):
+    """Redirect user to setup when a feature is disabled."""
+    messages.warning(request, f'Funkcija "{feature_title}" ir atspējota aktīvajā siltumnīcā. Iespējojiet to iestatījumos.')
+    return redirect('irrigation:setup')
+
 class PlantListView(ListView):
     """List all plants with pagination"""
     model = Plant
     template_name = 'irrigation/plant_list.html'
     context_object_name = 'plants'
     paginate_by = 20
+
+    def dispatch(self, request, *args, **kwargs):
+        if not _feature_enabled('feature_plants', default=True):
+            return _redirect_feature_disabled(request, 'Augi')
+        return super().dispatch(request, *args, **kwargs)
     
     def get_queryset(self):
         queryset = Plant.objects.filter(active=True).order_by('-created_at')
@@ -1219,6 +1237,9 @@ class PlantListView(ListView):
 
 def plant_dashboard_view(request):
     """Plant management dashboard with overview (FR-16)"""
+    if not _feature_enabled('feature_plants', default=True):
+        return _redirect_feature_disabled(request, 'Augi')
+
     now = timezone.now()
     today = now.date()
     
@@ -1269,6 +1290,9 @@ def plant_dashboard_view(request):
 
 def plant_detail_view(request, plant_id):
     """View details of a specific plant (FR-16)"""
+    if not _feature_enabled('feature_plants', default=True):
+        return _redirect_feature_disabled(request, 'Augi')
+
     plant = get_object_or_404(Plant, id=plant_id)
     
     context = {
@@ -1281,6 +1305,9 @@ def plant_detail_view(request, plant_id):
 
 def create_plant_view(request):
     """Create a new plant registration (FR-9)"""
+    if not _feature_enabled('feature_plants', default=True):
+        return _redirect_feature_disabled(request, 'Augi')
+
     if request.method == 'POST':
         try:
             # Extract form data
@@ -1347,6 +1374,9 @@ def create_plant_view(request):
 
 def edit_plant_view(request, plant_id):
     """Edit plant information (FR-16)"""
+    if not _feature_enabled('feature_plants', default=True):
+        return _redirect_feature_disabled(request, 'Augi')
+
     plant = get_object_or_404(Plant, id=plant_id)
     
     if not plant.active:
@@ -1408,6 +1438,9 @@ def edit_plant_view(request, plant_id):
 
 def deactivate_plant_view(request, plant_id):
     """Deactivate plant (soft delete)"""
+    if not _feature_enabled('feature_plants', default=True):
+        return _redirect_feature_disabled(request, 'Augi')
+
     plant = get_object_or_404(Plant, id=plant_id)
     
     if request.method == 'POST':
@@ -1422,6 +1455,9 @@ def deactivate_plant_view(request, plant_id):
 @ensure_csrf_cookie
 def greenhouse_layout_view(request):
     """Display greenhouse layout with plant positions and paths (FR-15)"""
+    if not _feature_enabled('feature_layout', default=True):
+        return _redirect_feature_disabled(request, 'Siltumnīcas izkārtojums')
+
     # Greenhouse context
     active_greenhouse = GreenhouseConfig.get_config()
     all_greenhouses = GreenhouseConfig.objects.all().order_by('name')
@@ -1520,30 +1556,6 @@ def greenhouse_layout_view(request):
     return render(request, 'irrigation/greenhouse_layout.html', context)
 
 
-def plants_ready_for_harvest_view(request):
-    """View plants that are ready for harvest (FR-14)"""
-    today = timezone.now().date()
-    
-    ready_plants = Plant.objects.filter(
-        active=True,
-        harvest_date_estimate__lte=today
-    ).order_by('harvest_date_estimate')
-    
-    upcoming_harvest = Plant.objects.filter(
-        active=True,
-        harvest_date_estimate__gt=today,
-        harvest_date_estimate__lte=today + timezone.timedelta(days=7)
-    ).order_by('harvest_date_estimate')
-    
-    context = {
-        'ready_plants': ready_plants,
-        'upcoming_harvest': upcoming_harvest,
-        'current_date': today,
-    }
-    
-    return render(request, 'irrigation/harvest_ready.html', context)
-
-
 def get_greenhouse_layout_summary(max_rows=10, max_columns=10):
     """Helper function to generate greenhouse layout data"""
     plants = Plant.objects.filter(active=True) 
@@ -1562,7 +1574,6 @@ def get_greenhouse_layout_summary(max_rows=10, max_columns=10):
                 'variety': plant.variety,
                 'planting_date': plant.planting_date,
                 'days_since_planting': plant.days_since_planting,
-                'harvest_ready': plant.is_ready_for_harvest
             }
     
     return layout
@@ -1572,6 +1583,9 @@ def get_greenhouse_layout_summary(max_rows=10, max_columns=10):
 @csrf_exempt
 def plants_api(request):
     """API endpoint for plant data (for AJAX requests)"""
+    if not _feature_enabled('feature_plants', default=True):
+        return JsonResponse({'success': False, 'error': 'Augu modulis ir atspējots aktīvajā siltumnīcā.'}, status=403)
+
     if request.method == 'GET':
         active_only = request.GET.get('active_only', 'true').lower() == 'true'
         search_query = request.GET.get('search', '')
@@ -1596,7 +1610,6 @@ def plants_api(request):
                 'location': plant.location_coordinate,
                 'planting_date': plant.planting_date.isoformat(),
                 'days_since_planting': plant.days_since_planting,
-                'harvest_ready': plant.is_ready_for_harvest,
                 'active': plant.active
             })
         
@@ -1685,6 +1698,9 @@ def plants_api(request):
 @csrf_exempt
 def paths_api(request):
     """API endpoint for path data (for AJAX requests)"""
+    if not _feature_enabled('feature_layout', default=True):
+        return JsonResponse({'success': False, 'error': 'Izkārtojuma modulis ir atspējots aktīvajā siltumnīcā.'}, status=403)
+
     if request.method == 'GET':
         # Get all path cells
         paths = PathCell.objects.all()
@@ -1815,6 +1831,7 @@ def setup_view(request):
     return render(request, 'irrigation/setup.html', {
         'greenhouses': greenhouses,
         'active': active,
+        'is_first_setup': not greenhouses.exists(),
         'device_type_choices': Device.DEVICE_TYPE_CHOICES,
     })
 
@@ -1826,6 +1843,11 @@ def setup_greenhouse_view(request):
         name = request.POST.get('name', '').strip()
         location = request.POST.get('location', '').strip()
         season = request.POST.get('season', '').strip()
+        feature_plants = request.POST.get('feature_plants') == 'on'
+        feature_layout = request.POST.get('feature_layout') == 'on'
+        feature_meteostation = request.POST.get('feature_meteostation') == 'on'
+        feature_watering_liters = request.POST.get('feature_watering_liters') == 'on'
+        feature_smart_suggestions = request.POST.get('feature_smart_suggestions') == 'on'
 
         if not name:
             messages.error(request, 'Siltumnīcas nosaukums ir obligāts.')
@@ -1842,6 +1864,11 @@ def setup_greenhouse_view(request):
         config.name = name
         config.location = location
         config.season = season
+        config.feature_plants = feature_plants
+        config.feature_layout = feature_layout
+        config.feature_meteostation = feature_meteostation
+        config.feature_watering_liters = feature_watering_liters
+        config.feature_smart_suggestions = feature_smart_suggestions
         config.save()
         messages.success(request, 'Siltumnīcas konfigurācija saglabāta!')
     return redirect('irrigation:setup')

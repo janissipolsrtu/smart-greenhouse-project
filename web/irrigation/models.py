@@ -216,6 +216,11 @@ class GreenhouseConfig(models.Model):
     controller_ip = models.GenericIPAddressField(null=True, blank=True, help_text="Kontrollera IP adrese")
     controller_username = models.CharField(max_length=100, blank=True, help_text="Kontrollera lietotājvārds")
     controller_password = models.CharField(max_length=255, blank=True, help_text="Kontrollera parole (glabāta šifrēta)")
+    feature_plants = models.BooleanField(default=True, help_text="Iespējot augu pārvaldības moduli")
+    feature_layout = models.BooleanField(default=True, help_text="Iespējot siltumnīcas izkārtojuma moduli")
+    feature_meteostation = models.BooleanField(default=False, help_text="Iespējot meteostacijas datu moduli")
+    feature_watering_liters = models.BooleanField(default=False, help_text="Iespējot laistīšanu litros")
+    feature_smart_suggestions = models.BooleanField(default=False, help_text="Iespējot gudros ieteikumus")
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 

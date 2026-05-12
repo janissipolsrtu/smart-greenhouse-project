@@ -35,53 +35,46 @@
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
             <a class="navbar-brand" href="{% url 'irrigation:dashboard' %}">
-                <i class="fas fa-seedling me-2"></i>Gudrā siltumnīca
+                <i class="fas fa-home me-2"></i>Gudrā siltumnīca
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'irrigation:dashboard' %}">
-                            <i class="fas fa-tachometer-alt me-1"></i>Pārskats
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="wateringPlansDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-layer-group me-1"></i>Laistīšanas plāni
                         </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'irrigation:plan_list' %}">
-                            <i class="fas fa-layer-group me-1"></i>Plāni
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'irrigation:cycle_list' %}">
-                            <i class="fas fa-list me-1"></i>Cikli
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'irrigation:create_plan' %}">
-                            <i class="fas fa-plus me-1"></i>Jauns plāns
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'irrigation:create_cycle' %}">
-                            <i class="fas fa-tint me-1"></i>Jauns cikls
-                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'irrigation:plan_list' %}">
+                                <i class="fas fa-layer-group me-1"></i>Plāni
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'irrigation:cycle_list' %}">
+                                <i class="fas fa-list me-1"></i>Cikli
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'irrigation:create_cycle' %}">
+                                <i class="fas fa-tint me-1"></i>Jauns cikls
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'irrigation:create_plan' %}">
+                                <i class="fas fa-plus me-1"></i>Jauns plāns
+                            </a></li>
+                        </ul>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'irrigation:sensor_dashboard' %}">
                             <i class="fas fa-thermometer-half me-1"></i>Sensori
                         </a>
                     </li>
+                    {% if feature_plants_enabled or feature_layout_enabled %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="plantsDropdown" role="button" data-bs-toggle="dropdown">
-                            <i class="fas fa-seedling me-1"></i>Augi
+                            <i class="fas fa-seedling me-1"></i>Moduļi
                         </a>
                         <ul class="dropdown-menu">
+                            {% if feature_plants_enabled %}
                             <li><a class="dropdown-item" href="{% url 'irrigation:plant_dashboard' %}">
                                 <i class="fas fa-chart-pie me-1"></i>Augu Dashboard
-                            </a></li>
-                            <li><a class="dropdown-item" href="{% url 'irrigation:greenhouse_layout' %}">
-                                <i class="fas fa-th-large me-1"></i>Siltumnīcas Izkārtojums
                             </a></li>
                             <li><a class="dropdown-item" href="{% url 'irrigation:plant_list' %}">
                                 <i class="fas fa-list me-1"></i>Visi Augi
@@ -89,11 +82,15 @@
                             <li><a class="dropdown-item" href="{% url 'irrigation:create_plant' %}">
                                 <i class="fas fa-plus me-1"></i>Pievienot Augu
                             </a></li>
-                            <li><a class="dropdown-item" href="{% url 'irrigation:harvest_ready' %}">
-                                <i class="fas fa-apple-alt me-1"></i>Gatavi Ražai
+                            {% endif %}
+                            {% if feature_layout_enabled %}
+                            <li><a class="dropdown-item" href="{% url 'irrigation:greenhouse_layout' %}">
+                                <i class="fas fa-th-large me-1"></i>Siltumnīcas Izkārtojums
                             </a></li>
+                            {% endif %}
                         </ul>
                     </li>
+                    {% endif %}
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'irrigation:system_status' %}">
                             <i class="fas fa-server me-1"></i>Sistēmas statuss
