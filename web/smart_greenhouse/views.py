@@ -16,7 +16,7 @@ from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 import os
-from .models import WateringPlan, WateringCycle, SensorData, Plant, PathCell, GreenhouseConfig, Device
+from .models import WateringPlan, WateringCycle, SensorData, Plant, PathCell, GreenhouseConfig, Device, DeviceType
 from .forms import RegistrationForm
 import uuid
 import time
@@ -169,7 +169,7 @@ def dashboard_view(request):
         greenhouse_devices = Device.objects.filter(greenhouse=active_greenhouse, active=True).exclude(
             name__iexact='Laistīšanas vārsts'
         ).exclude(
-            device_type='irrigation_controller'
+            device_type__type_key='irrigation_controller'
         ).order_by('name')
 
     sensor_identifiers = []
@@ -700,7 +700,7 @@ def temperature_dashboard_view(request):
         greenhouse_devices = Device.objects.filter(greenhouse=active_greenhouse, active=True).exclude(
             name__iexact='Laistīšanas vārsts'
         ).exclude(
-            device_type='irrigation_controller'
+            device_type__type_key='irrigation_controller'
         ).order_by('name')
         device_ids = list(greenhouse_devices.values_list('zigbee_id', flat=True))
         device_names = list(greenhouse_devices.values_list('name', flat=True))
@@ -1832,7 +1832,7 @@ def setup_view(request):
         'greenhouses': greenhouses,
         'active': active,
         'is_first_setup': not greenhouses.exists(),
-        'device_type_choices': Device.DEVICE_TYPE_CHOICES,
+        'device_type_choices': DeviceType.objects.all(),
     })
 
 
@@ -1857,12 +1857,8 @@ def setup_greenhouse_view(request):
             config = get_object_or_404(GreenhouseConfig, pk=greenhouse_id)
         else:
             config = GreenhouseConfig()
-            # First greenhouse is automatically active
-            if not GreenhouseConfig.objects.exists():
-                config.is_active = True
 
         config.name = name
-        config.location = location
         config.season = season
         config.feature_plants = feature_plants
         config.feature_layout = feature_layout
@@ -1870,6 +1866,33 @@ def setup_greenhouse_view(request):
         config.feature_watering_liters = feature_watering_liters
         config.feature_smart_suggestions = feature_smart_suggestions
         config.save()
+
+        # Location lives in greenhouses table — update if a matching record exists
+        if location:
+            from django.db import connection as _conn
+            with _conn.cursor() as cur:
+                cur.execute(
+                    """
+                    WITH matched AS (
+                        SELECT id
+                        FROM greenhouses
+                        WHERE id = %s OR name = %s
+                        ORDER BY CASE WHEN id = %s THEN 0 ELSE 1 END, updated_at DESC
+                        LIMIT 1
+                    )
+                    UPDATE greenhouses
+                    SET location = %s, updated_at = NOW()
+                    FROM matched
+                    WHERE greenhouses.id = matched.id
+                    RETURNING greenhouses.id
+                    """,
+                    [config.greenhouse_id or "", name, config.greenhouse_id or "", location],
+                )
+                linked = cur.fetchone()
+                if linked and linked[0] != config.greenhouse_id:
+                    config.greenhouse_id = linked[0]
+                    config.save(update_fields=['greenhouse_id'])
+
         messages.success(request, 'Siltumnīcas konfigurācija saglabāta!')
     return redirect('smart_greenhouse:setup')
 
@@ -1913,14 +1936,13 @@ def setup_select_greenhouse_view(request, greenhouse_id):
 def setup_delete_greenhouse_view(request, greenhouse_id):
     """Delete a greenhouse configuration."""
     config = get_object_or_404(GreenhouseConfig, pk=greenhouse_id)
-    was_active = config.is_active
+    was_active = config.pk
     name = config.name
     config.delete()
-    # If deleted was active, promote the next one
-    if was_active:
-        remaining = GreenhouseConfig.objects.first()
-        if remaining:
-            remaining.set_active()
+    # Promote the next greenhouse to most-recently-updated so get_config() picks it up
+    remaining = GreenhouseConfig.objects.first()
+    if remaining:
+        remaining.set_active()
     messages.success(request, f'"{name}" dzēsta.')
     return redirect('smart_greenhouse:setup')
 
@@ -1931,7 +1953,7 @@ def setup_add_device_view(request, greenhouse_id):
     greenhouse = get_object_or_404(GreenhouseConfig, pk=greenhouse_id)
     zigbee_id = request.POST.get('zigbee_id', '').strip()
     name = request.POST.get('name', '').strip()
-    device_type = request.POST.get('device_type', 'other').strip()
+    device_type_key = request.POST.get('device_type', 'other').strip()
     notes = request.POST.get('notes', '').strip()
 
     if not zigbee_id or not name:
@@ -1939,11 +1961,15 @@ def setup_add_device_view(request, greenhouse_id):
         return redirect('smart_greenhouse:setup')
 
     try:
+        device_type_obj, _ = DeviceType.objects.get_or_create(
+            type_key=device_type_key,
+            defaults={'name': device_type_key.replace('_', ' ').title()},
+        )
         Device.objects.create(
             greenhouse=greenhouse,
             zigbee_id=zigbee_id,
             name=name,
-            device_type=device_type,
+            device_type=device_type_obj,
             notes=notes,
         )
         messages.success(request, f'Ierīce "{name}" pievienota siltumnīcai "{greenhouse.name}".')

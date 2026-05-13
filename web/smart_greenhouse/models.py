@@ -7,6 +7,15 @@ class SensorData(models.Model):
     """Model for storing sensor data from MQTT devices"""
     
     id = models.AutoField(primary_key=True)
+    device = models.ForeignKey(
+        'Device',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column='device_id',
+        related_name='sensor_readings',
+        help_text="Device that produced this reading",
+    )
     device_name = models.CharField(max_length=100, help_text="Name of the sensor device")
     temperature = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Temperature in Celsius")
     humidity = models.IntegerField(null=True, blank=True, help_text="Humidity percentage")
@@ -96,6 +105,15 @@ class WateringCycle(models.Model):
         null=True,
         blank=True,
         help_text="Optional watering plan container"
+    )
+    greenhouse_config = models.ForeignKey(
+        'GreenhouseConfig',
+        on_delete=models.SET_NULL,
+        related_name='watering_cycles',
+        null=True,
+        blank=True,
+        db_column='greenhouse_config_id',
+        help_text="Greenhouse configuration this cycle belongs to",
     )
     device = models.CharField(max_length=50, choices=DEVICE_CHOICES, default='0x540f57fffe890af8')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
@@ -210,9 +228,8 @@ class GreenhouseConfig(models.Model):
     """Configuration for a greenhouse and its controller. Multiple greenhouses supported."""
 
     name = models.CharField(max_length=120, help_text="Siltumnīcas nosaukums")
-    location = models.CharField(max_length=200, blank=True, help_text="Siltumnīcas atrašanās vieta")
+    greenhouse_id = models.CharField(max_length=255, null=True, blank=True, db_index=True, help_text="Saistītās siltumnīcas ID")
     season = models.CharField(max_length=100, blank=True, help_text="Sezona (piem., Pavasaris 2026)")
-    is_active = models.BooleanField(default=False, help_text="Aktīvā siltumnīca")
     controller_ip = models.GenericIPAddressField(null=True, blank=True, help_text="Kontrollera IP adrese")
     controller_username = models.CharField(max_length=100, blank=True, help_text="Kontrollera lietotājvārds")
     controller_password = models.CharField(max_length=255, blank=True, help_text="Kontrollera parole (glabāta šifrēta)")
@@ -221,6 +238,7 @@ class GreenhouseConfig(models.Model):
     feature_meteostation = models.BooleanField(default=False, help_text="Iespējot meteostacijas datu moduli")
     feature_watering_liters = models.BooleanField(default=False, help_text="Iespējot laistīšanu litros")
     feature_smart_suggestions = models.BooleanField(default=False, help_text="Iespējot gudros ieteikumus")
+    selected = models.BooleanField(default=False, help_text="Izvēlētā siltumnīca")
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -228,19 +246,38 @@ class GreenhouseConfig(models.Model):
         db_table = 'greenhouse_config'
         verbose_name = "Greenhouse Configuration"
 
+    @property
+    def location(self):
+        """Read location from greenhouses table (single source of truth)."""
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT location
+                FROM greenhouses
+                WHERE id = %s OR name = %s
+                ORDER BY CASE WHEN id = %s THEN 0 ELSE 1 END, updated_at DESC
+                LIMIT 1
+                """,
+                [self.greenhouse_id or "", self.name, self.greenhouse_id or ""],
+            )
+            row = cursor.fetchone()
+        return (row[0] or "") if row else ""
+
     def __str__(self):
-        return f"{self.name} @ {self.location or 'nav norādīts'}"
+        return self.name
 
     @classmethod
     def get_config(cls):
-        """Return the active greenhouse, falling back to the first one."""
-        return cls.objects.filter(is_active=True).first() or cls.objects.first()
+        """Return the selected greenhouse, falling back to the first one."""
+        return cls.objects.filter(selected=True).first() or cls.objects.first()
 
     def set_active(self):
-        """Mark this greenhouse as active and deactivate all others."""
-        GreenhouseConfig.objects.exclude(pk=self.pk).update(is_active=False)
-        self.is_active = True
-        self.save(update_fields=['is_active'])
+        """Mark this greenhouse as selected and deselect all others."""
+        GreenhouseConfig.objects.exclude(pk=self.pk).update(selected=False)
+        self.selected = True
+        self.save(update_fields=['selected'])
+
 
     def set_password(self, raw_password):
         """Store a bcrypt hash of the controller password."""
@@ -258,25 +295,36 @@ class GreenhouseConfig(models.Model):
         return hashlib.sha256(f"{salt}{raw_password}".encode()).hexdigest() == hashed
 
 
+class DeviceType(models.Model):
+    """Lookup table for device types (e.g. irrigation_controller, temperature_sensor)."""
+
+    type_key = models.CharField(max_length=40, unique=True, help_text="Machine-readable key, e.g. 'irrigation_controller'")
+    name = models.CharField(max_length=120, help_text="Human-readable name")
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'device_types'
+        ordering = ['type_key']
+
+    def __str__(self):
+        return self.name
+
+
 class Device(models.Model):
     """A physical Zigbee/MQTT device paired to a specific greenhouse."""
-
-    DEVICE_TYPE_CHOICES = [
-        ('irrigation_controller', 'Irrigation Controller'),
-        ('temperature_sensor', 'Temperature Sensor'),
-        ('humidity_sensor', 'Humidity Sensor'),
-        ('other', 'Other'),
-    ]
 
     zigbee_id = models.CharField(
         max_length=100,
         help_text="Zigbee IEEE address, e.g. 0x540f57fffe890af8",
     )
     name = models.CharField(max_length=120, help_text="Human-readable device name")
-    device_type = models.CharField(
-        max_length=40,
-        choices=DEVICE_TYPE_CHOICES,
-        default='other',
+    device_type = models.ForeignKey(
+        DeviceType,
+        on_delete=models.PROTECT,
+        related_name='devices',
+        null=True,
+        blank=True,
+        db_column='device_type_id',
         help_text="Type of device",
     )
     greenhouse = models.ForeignKey(
@@ -292,7 +340,7 @@ class Device(models.Model):
 
     class Meta:
         db_table = 'devices'
-        ordering = ['device_type', 'name']
+        ordering = ['device_type__type_key', 'name']
         unique_together = [('greenhouse', 'zigbee_id')]
 
     def __str__(self):

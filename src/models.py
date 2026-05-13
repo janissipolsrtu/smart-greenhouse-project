@@ -13,6 +13,7 @@ class WateringPlan(Base):
     id = Column(String, primary_key=True, default=lambda: f"plan_{int(datetime.utcnow().timestamp())}_{uuid.uuid4().hex[:8]}")
     name = Column(String(120), nullable=False, index=True)
     description = Column(Text, nullable=True)
+    greenhouse_config_id = Column(Integer, ForeignKey("greenhouse_config.id", ondelete="SET NULL"), nullable=True, index=True)
     start_date = Column(Date, nullable=True)
     end_date = Column(Date, nullable=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
@@ -27,6 +28,7 @@ class WateringPlan(Base):
             "id": self.id,
             "name": self.name,
             "description": self.description,
+            "greenhouse_config_id": self.greenhouse_config_id,
             "start_date": self.start_date.isoformat() if self.start_date else None,
             "end_date": self.end_date.isoformat() if self.end_date else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
@@ -49,6 +51,7 @@ class WateringCycle(Base):
     executed_at = Column(DateTime, nullable=True)  # Naive UTC datetime
     result = Column(Text, nullable=True)
     plan_id = Column(String, ForeignKey("watering_plans.id", ondelete="SET NULL"), nullable=True, index=True)
+    greenhouse_config_id = Column(Integer, ForeignKey("greenhouse_config.id", ondelete="SET NULL"), nullable=True, index=True)
     
     def __repr__(self):
         return f"<WateringCycle(id='{self.id}', scheduled_time='{self.scheduled_time}', status='{self.status}')>"
@@ -67,44 +70,44 @@ class WateringCycle(Base):
             "executed_at": self.executed_at.isoformat() if self.executed_at else None,
             "result": self.result,
             "plan_id": self.plan_id,
+            "greenhouse_config_id": self.greenhouse_config_id,
         }
 
 
 class Greenhouse(Base):
-    """Database model for greenhouse-specific configuration, including MQTT auth"""
+    """Database model for greenhouse metadata; MQTT auth lives in greenhouse_config."""
     __tablename__ = "greenhouses"
 
     id = Column(String, primary_key=True, default=lambda: f"greenhouse_{int(datetime.utcnow().timestamp())}_{uuid.uuid4().hex[:8]}")
     name = Column(String(120), nullable=False, index=True)
     description = Column(Text, nullable=True)
     location = Column(String(200), nullable=True)
-    mqtt_broker = Column(String(120), nullable=False, default="192.168.8.151")
-    mqtt_port = Column(Integer, nullable=False, default=1883)
-    mqtt_username = Column(String(120), nullable=True)
-    mqtt_password = Column(Text, nullable=True)
-    active = Column(Boolean, default=True, nullable=False, index=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     def __repr__(self):
-        return f"<Greenhouse(id='{self.id}', name='{self.name}', broker='{self.mqtt_broker}:{self.mqtt_port}')>"
+        return f"<Greenhouse(id='{self.id}', name='{self.name}')>"
 
     def to_dict(self, include_sensitive: bool = False):
+        mqtt_broker = getattr(self, "mqtt_broker", None)
+        mqtt_port = getattr(self, "mqtt_port", 1883)
+        mqtt_username = getattr(self, "mqtt_username", None)
+        mqtt_password = getattr(self, "mqtt_password", None)
+
         payload = {
             "id": self.id,
             "name": self.name,
             "description": self.description,
             "location": self.location,
-            "mqtt_broker": self.mqtt_broker,
-            "mqtt_port": self.mqtt_port,
-            "mqtt_username": self.mqtt_username,
-            "has_mqtt_password": bool(self.mqtt_password),
-            "active": self.active,
+            "mqtt_broker": mqtt_broker,
+            "mqtt_port": mqtt_port,
+            "mqtt_username": mqtt_username,
+            "has_mqtt_password": bool(mqtt_password),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
         if include_sensitive:
-            payload["mqtt_password"] = self.mqtt_password
+            payload["mqtt_password"] = mqtt_password
         return payload
 
 

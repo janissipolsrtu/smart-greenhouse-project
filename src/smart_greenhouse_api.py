@@ -94,7 +94,6 @@ class GreenhouseBase(BaseModel):
     mqtt_port: int = 1883
     description: Optional[str] = None
     location: Optional[str] = None
-    active: bool = True
 
 
 class GreenhouseCreate(GreenhouseBase):
@@ -109,7 +108,6 @@ class GreenhouseUpdate(BaseModel):
     mqtt_port: Optional[int] = None
     description: Optional[str] = None
     location: Optional[str] = None
-    active: Optional[bool] = None
 
 
 class DevicePairingRequest(BaseModel):
@@ -1147,7 +1145,6 @@ async def create_greenhouse(greenhouse: GreenhouseCreate):
             mqtt_port=greenhouse.mqtt_port,
             description=greenhouse.description,
             location=greenhouse.location,
-            active=greenhouse.active,
         )
 
         return ApiResponse(
@@ -1165,10 +1162,10 @@ async def create_greenhouse(greenhouse: GreenhouseCreate):
 
 
 @app.get("/api/greenhouses", response_model=ApiResponse, tags=["Greenhouse Management"])
-async def get_greenhouses(active_only: bool = False):
+async def get_greenhouses():
     """Get all greenhouses with MQTT configuration metadata."""
     try:
-        greenhouses = GreenhouseService.get_all_greenhouses(active_only=active_only)
+        greenhouses = GreenhouseService.get_all_greenhouses()
         greenhouse_data = [greenhouse.to_dict() for greenhouse in greenhouses]
         return ApiResponse(
             success=True,
@@ -1176,7 +1173,6 @@ async def get_greenhouses(active_only: bool = False):
             data={
                 "greenhouses": greenhouse_data,
                 "count": len(greenhouse_data),
-                "active_only": active_only,
             }
         )
     except Exception as e:

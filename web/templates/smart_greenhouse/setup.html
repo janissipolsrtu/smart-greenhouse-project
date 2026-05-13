@@ -48,11 +48,11 @@
 <div class="row g-3 mb-4">
   {% for gh in greenhouses %}
   <div class="col-md-6 col-xl-4">
-    <div class="card h-100 {% if gh.is_active %}border-success border-2{% endif %}">
+    <div class="card h-100 {% if gh.selected %}border-success border-2{% endif %}">
       <div class="card-header d-flex align-items-center gap-2">
         <i class="fas fa-seedling text-success"></i>
         <strong class="me-auto">{{ gh.name }}</strong>
-        {% if gh.is_active %}
+        {% if gh.selected %}
           <span class="badge bg-success"><i class="fas fa-check me-1"></i>Aktīva</span>
         {% else %}
           <form method="post" action="{% url "smart_greenhouse:setup_select" gh.pk %}" class="d-inline">
@@ -103,11 +103,11 @@
         <ul class="list-group list-group-flush small" id="device-list-{{ gh.pk }}">
           {% for device in devices %}
           <li class="list-group-item px-0 py-1 d-flex align-items-center gap-2">
-            {% if device.device_type == 'irrigation_controller' %}
+            {% if device.device_type.type_key == 'irrigation_controller' %}
               <i class="fas fa-faucet text-primary"></i>
-            {% elif device.device_type == 'temperature_sensor' %}
+            {% elif device.device_type.type_key == 'temperature_sensor' %}
               <i class="fas fa-thermometer-half text-danger"></i>
-            {% elif device.device_type == 'humidity_sensor' %}
+            {% elif device.device_type.type_key == 'humidity_sensor' %}
               <i class="fas fa-tint text-info"></i>
             {% else %}
               <i class="fas fa-microchip text-secondary"></i>
@@ -160,8 +160,8 @@
               </div>
               <div class="col-12">
                 <select name="device_type" class="form-select form-select-sm">
-                  {% for value, label in device_type_choices %}
-                  <option value="{{ value }}">{{ label }}</option>
+                  {% for dt in device_type_choices %}
+                  <option value="{{ dt.type_key }}">{{ dt.name }}</option>
                   {% endfor %}
                 </select>
               </div>

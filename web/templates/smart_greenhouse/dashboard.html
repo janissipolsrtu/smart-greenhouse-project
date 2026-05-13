@@ -34,7 +34,7 @@
       <ul class="dropdown-menu dropdown-menu-end">
         {% for gh in all_greenhouses %}
         <li>
-          {% if gh.is_active %}
+          {% if gh.selected %}
             <span class="dropdown-item active">
               <i class="fas fa-check me-2"></i>{{ gh.name }}
               {% if gh.location %}<small class="text-muted d-block ms-4">{{ gh.location }}</small>{% endif %}

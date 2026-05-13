@@ -27,7 +27,7 @@
                 <select name="greenhouse_config" class="form-select">
                     <option value="">-- Izvēlēties siltumnīcu --</option>
                     {% for gh in all_greenhouses %}
-                        <option value="{{ gh.pk }}" {% if gh.is_active %}selected{% endif %}>
+                        <option value="{{ gh.pk }}" {% if gh.selected %}selected{% endif %}>
                             {{ gh.name }}{% if gh.location %} – {{ gh.location }}{% endif %}
                             {% if gh.season %} ({{ gh.season }}){% endif %}
                         </option>

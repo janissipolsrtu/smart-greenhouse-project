@@ -82,7 +82,36 @@ def init_database():
                 conn.execute(text("ALTER TABLE watering_cycle ADD COLUMN plan_id VARCHAR"))
                 logger.info("Added plan_id column to watering_cycle")
 
+            if "greenhouse_config_id" not in columns:
+                conn.execute(text("ALTER TABLE watering_cycle ADD COLUMN greenhouse_config_id INTEGER"))
+                logger.info("Added greenhouse_config_id column to watering_cycle")
+
+                        conn.execute(text(
+                                """
+                                UPDATE watering_cycle wc
+                                SET greenhouse_config_id = wp.greenhouse_config_id
+                                FROM watering_plans wp
+                                WHERE wc.plan_id = wp.id
+                                    AND wc.greenhouse_config_id IS NULL
+                                """
+                        ))
+
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_watering_cycle_plan_id ON watering_cycle (plan_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_watering_cycle_greenhouse_config_id ON watering_cycle (greenhouse_config_id)"))
+            conn.execute(text(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'watering_cycle_greenhouse_config_id_fkey') THEN
+                        ALTER TABLE watering_cycle
+                        ADD CONSTRAINT watering_cycle_greenhouse_config_id_fkey
+                        FOREIGN KEY (greenhouse_config_id)
+                        REFERENCES greenhouse_config(id)
+                        ON DELETE SET NULL;
+                    END IF;
+                END $$;
+                """
+            ))
 
             # Sensor data schema for time-series workloads and Grafana dashboards.
             conn.execute(text(

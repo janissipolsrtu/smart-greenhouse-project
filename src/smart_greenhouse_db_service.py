@@ -24,12 +24,18 @@ class WateringCycleService:
         """Create a new watering cycle"""
         db = SessionLocal()
         try:
+            greenhouse_config_id = None
+            if plan_id:
+                plan = db.query(WateringPlan).filter(WateringPlan.id == plan_id).first()
+                greenhouse_config_id = plan.greenhouse_config_id if plan else None
+
             cycle = WateringCycle(
                 scheduled_time=scheduled_time,
                 duration=duration,
                 description=description,
                 device=device,
                 plan_id=plan_id,
+                greenhouse_config_id=greenhouse_config_id,
             )
             db.add(cycle)
             db.commit()
@@ -136,6 +142,11 @@ class WateringCycleService:
             cycle.duration = duration
             cycle.description = description or cycle.description
             cycle.plan_id = plan_id
+            if plan_id:
+                plan = db.query(WateringPlan).filter(WateringPlan.id == plan_id).first()
+                cycle.greenhouse_config_id = plan.greenhouse_config_id if plan else None
+            else:
+                cycle.greenhouse_config_id = None
 
             db.commit()
             db.refresh(cycle)
@@ -162,6 +173,7 @@ class WateringCycleService:
                 return None
 
             cycle.plan_id = plan_id
+            cycle.greenhouse_config_id = plan.greenhouse_config_id
             db.commit()
             db.refresh(cycle)
             return cycle
@@ -181,6 +193,7 @@ class WateringCycleService:
                 return None
 
             cycle.plan_id = None
+            cycle.greenhouse_config_id = None
             db.commit()
             db.refresh(cycle)
             return cycle
