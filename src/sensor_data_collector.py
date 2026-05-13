@@ -44,7 +44,7 @@ class SensorDataCollector:
         self.running = True
         
     def setup_database(self):
-        """Create sensor_measurements table if it doesn't exist"""
+        """Setup database connection for sensor_data table (table created by database.py init)"""
         try:
             self.db_connection = psycopg2.connect(
                 host=DB_HOST,
@@ -56,42 +56,14 @@ class SensorDataCollector:
             
             cursor = self.db_connection.cursor()
             
-            # Create sensor_measurements table aligned with time-series analytics use-cases.
-            create_table_sql = """
-            CREATE TABLE IF NOT EXISTS sensor_measurements (
-                id BIGSERIAL,
-                device_name VARCHAR(100) NOT NULL,
-                topic VARCHAR(255),
-                temperature DOUBLE PRECISION,
-                humidity DOUBLE PRECISION,
-                linkquality INTEGER,
-                battery INTEGER,
-                max_temperature DOUBLE PRECISION,
-                min_temperature DOUBLE PRECISION,
-                temperature_sensitivity DOUBLE PRECISION,
-                temperature_calibration DOUBLE PRECISION,
-                temperature_sampling INTEGER,
-                temperature_unit VARCHAR(20),
-                humidity_calibration DOUBLE PRECISION,
-                soil_moisture DOUBLE PRECISION,
-                soil_calibration DOUBLE PRECISION,
-                soil_sampling INTEGER,
-                soil_warning INTEGER,
-                dry BOOLEAN,
-                raw_data JSONB,
-                timestamp TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
+            # NOTE: sensor_data table is created and managed by database.py init_database()
+            # This collector only inserts data into the already-created table.
+            # The table creation code for sensor_measurements has been removed as
+            # we consolidated to use sensor_data as the single sensor storage table.
             
-            CREATE INDEX IF NOT EXISTS idx_sensor_measurements_ts ON sensor_measurements(timestamp DESC);
-            CREATE INDEX IF NOT EXISTS idx_sensor_measurements_device_ts ON sensor_measurements(device_name, timestamp DESC);
-            """
-            
-            cursor.execute(create_table_sql)
-            self.db_connection.commit()
             cursor.close()
             
-            logger.info("Database setup completed - sensor_measurements table ready")
+            logger.info("Database setup completed - connected to sensor_data table")
             
         except Exception as e:
             logger.error(f"❌ Database setup failed: {e}")
@@ -160,7 +132,7 @@ class SensorDataCollector:
             cursor = self.db_connection.cursor()
             
             insert_sql = """
-            INSERT INTO sensor_measurements (
+            INSERT INTO sensor_data (
                 device_name, topic, temperature, humidity, linkquality,
                 battery, max_temperature, min_temperature, temperature_sensitivity,
                 temperature_calibration, temperature_sampling, temperature_unit,

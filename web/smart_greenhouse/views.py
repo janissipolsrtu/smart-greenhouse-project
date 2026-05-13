@@ -39,7 +39,7 @@ class WateringCycleListView(ListView):
 def login_view(request):
     """Login page for web UI users."""
     if request.user.is_authenticated:
-        return redirect('irrigation:dashboard')
+        return redirect('smart_greenhouse:dashboard')
 
     form = AuthenticationForm(request, data=request.POST or None)
     if request.method == 'POST':
@@ -50,7 +50,7 @@ def login_view(request):
             next_url = request.GET.get('next') or request.POST.get('next')
             if next_url:
                 return redirect(next_url)
-            return redirect('irrigation:dashboard')
+            return redirect('smart_greenhouse:dashboard')
 
         username = (request.POST.get('username') or '').strip().lower()
         if username and User.objects.filter(username=username, is_active=False).exists():
@@ -63,14 +63,14 @@ def logout_view(request):
     """Logout current user."""
     logout(request)
     messages.info(request, 'Jūs esat atslēdzies no sistēmas.')
-    return redirect('irrigation:login')
+    return redirect('smart_greenhouse:login')
 
 
 @require_http_methods(["GET", "POST"])
 def register_view(request):
     """Self-registration with email confirmation."""
     if request.user.is_authenticated:
-        return redirect('irrigation:dashboard')
+        return redirect('smart_greenhouse:dashboard')
 
     form = RegistrationForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
@@ -87,7 +87,7 @@ def register_view(request):
         uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
         token = default_token_generator.make_token(user)
         verify_url = request.build_absolute_uri(
-            reverse('irrigation:verify_email', kwargs={'uidb64': uidb64, 'token': token})
+            reverse('smart_greenhouse:verify_email', kwargs={'uidb64': uidb64, 'token': token})
         )
 
         send_mail(
@@ -104,7 +104,7 @@ def register_view(request):
         )
 
         messages.success(request, 'Reģistrācija veiksmīga. Pārbaudiet e-pastu un apstipriniet kontu.')
-        return redirect('irrigation:login')
+        return redirect('smart_greenhouse:login')
 
     return render(request, 'registration/register.html', {'form': form})
 
@@ -123,10 +123,10 @@ def verify_email_view(request, uidb64, token):
         user.save(update_fields=['is_active'])
         login(request, user)
         messages.success(request, 'E-pasts apstiprināts. Konts aktivizēts.')
-        return redirect('irrigation:dashboard')
+        return redirect('smart_greenhouse:dashboard')
 
     messages.error(request, 'Apstiprināšanas saite nav derīga vai ir beigusies.')
-    return redirect('irrigation:login')
+    return redirect('smart_greenhouse:login')
 
 
 def dashboard_view(request):
@@ -182,7 +182,7 @@ def dashboard_view(request):
                 """
                 SELECT DISTINCT ON (device_name)
                     device_name, temperature, humidity, soil_moisture, linkquality, battery, timestamp
-                FROM sensor_measurements
+                FROM sensor_data
                 WHERE device_name = ANY(%s)
                 ORDER BY device_name, timestamp DESC
                 """,
@@ -193,7 +193,7 @@ def dashboard_view(request):
                 """
                 SELECT DISTINCT ON (device_name)
                     device_name, temperature, humidity, soil_moisture, linkquality, battery, timestamp
-                FROM sensor_measurements
+                FROM sensor_data
                 ORDER BY device_name, timestamp DESC
                 LIMIT 5
                 """
@@ -343,7 +343,7 @@ def create_cycle_view(request):
             )
             
             messages.success(request, f'Laistīšanas cikls {cycle_id} veiksmīgi izveidots!')
-            return redirect('irrigation:dashboard')
+            return redirect('smart_greenhouse:dashboard')
             
         except Exception as e:
             messages.error(request, f'Kļūda izveidojot ciklu: {str(e)}')
@@ -369,7 +369,7 @@ def delete_cycle_view(request, cycle_id):
     if request.method == 'POST':
         cycle.delete()
         messages.success(request, f'Cikls {cycle_id} veiksmīgi dzēsts!')
-        return redirect('irrigation:dashboard')
+        return redirect('smart_greenhouse:dashboard')
     
     return render(request, 'smart_greenhouse/confirm_delete.html', {'cycle': cycle, 'plan': cycle})
 
@@ -507,7 +507,7 @@ def create_plan_view(request):
                 messages.success(request, f'Laistīšanas plāns {plan_id} veiksmīgi izveidots ar {created_cycles} cikliem!')
             else:
                 messages.success(request, f'Laistīšanas plāns {plan_id} veiksmīgi izveidots!')
-            return redirect('irrigation:plan_list')
+            return redirect('smart_greenhouse:plan_list')
         except Exception as e:
             messages.error(request, f'Kļūda izveidojot plānu: {str(e)}')
 
@@ -541,7 +541,7 @@ def delete_plan_view(request, plan_id):
         WateringCycle.objects.filter(plan=plan).update(plan=None)
         plan.delete()
         messages.success(request, f'Plāns {plan_id} veiksmīgi dzēsts!')
-        return redirect('irrigation:plan_list')
+        return redirect('smart_greenhouse:plan_list')
 
     return render(request, 'smart_greenhouse/confirm_delete_plan.html', {'plan': plan})
 
@@ -556,7 +556,7 @@ def assign_cycle_to_plan_view(request, plan_id, cycle_id):
         cycle.save(update_fields=['plan', 'updated_at'])
         messages.success(request, f'Cikls {cycle.id} pievienots plānam {plan.name}.')
 
-    return redirect('irrigation:plan_detail', plan_id=plan.id)
+    return redirect('smart_greenhouse:plan_detail', plan_id=plan.id)
 
 
 def unassign_cycle_from_plan_view(request, plan_id, cycle_id):
@@ -569,7 +569,7 @@ def unassign_cycle_from_plan_view(request, plan_id, cycle_id):
         cycle.save(update_fields=['plan', 'updated_at'])
         messages.success(request, f'Cikls {cycle.id} noņemts no plāna {plan.name}.')
 
-    return redirect('irrigation:plan_detail', plan_id=plan.id)
+    return redirect('smart_greenhouse:plan_detail', plan_id=plan.id)
 
 
 def system_status_view(request):
@@ -645,7 +645,7 @@ def temperature_dashboard_view(request):
                 SELECT device_name, temperature, humidity, linkquality, battery,
                        soil_moisture, max_temperature, min_temperature,
                        temperature_unit, raw_data, timestamp
-                FROM sensor_measurements
+                FROM sensor_data
                 WHERE device_name = ANY(%s)
                 ORDER BY timestamp DESC
                 LIMIT 1
@@ -681,7 +681,7 @@ def temperature_dashboard_view(request):
                 """
                 SELECT MAX(temperature) AS sensor_max_temperature,
                        MIN(temperature) AS sensor_min_temperature
-                FROM sensor_measurements
+                FROM sensor_data
                 WHERE device_name = ANY(%s)
                 """,
                 [identifiers],
@@ -751,7 +751,7 @@ def temperature_dashboard_view(request):
         # Fallback for setups without registered greenhouse devices.
         orm_device_names = set(sensor_query.values_list('device_name', flat=True).distinct())
         with connection.cursor() as cursor:
-            cursor.execute("SELECT DISTINCT device_name FROM sensor_measurements")
+            cursor.execute("SELECT DISTINCT device_name FROM sensor_data")
             measurement_device_names = {row[0] for row in cursor.fetchall() if row and row[0]}
 
         for device_name in sorted(orm_device_names.union(measurement_device_names)):
@@ -809,7 +809,7 @@ def temperature_dashboard_view(request):
             cursor.execute(
                 """
                 SELECT MAX(temperature), MIN(temperature), COUNT(*)
-                FROM sensor_measurements
+                FROM sensor_data
                 WHERE timestamp >= %s AND device_name = ANY(%s)
                 """,
                 [twenty_four_hours_ago, measurement_identifiers],
@@ -818,7 +818,7 @@ def temperature_dashboard_view(request):
             cursor.execute(
                 """
                 SELECT MAX(temperature), MIN(temperature), COUNT(*)
-                FROM sensor_measurements
+                FROM sensor_data
                 WHERE timestamp >= %s
                 """,
                 [twenty_four_hours_ago],
@@ -842,7 +842,7 @@ def temperature_dashboard_view(request):
                 cursor.execute(
                     """
                     SELECT AVG(temperature), AVG(humidity)
-                    FROM sensor_measurements
+                    FROM sensor_data
                     WHERE timestamp >= %s AND timestamp < %s AND device_name = ANY(%s)
                     """,
                     [hour_start, hour_end, measurement_identifiers],
@@ -851,7 +851,7 @@ def temperature_dashboard_view(request):
                 cursor.execute(
                     """
                     SELECT AVG(temperature), AVG(humidity)
-                    FROM sensor_measurements
+                    FROM sensor_data
                     WHERE timestamp >= %s AND timestamp < %s
                     """,
                     [hour_start, hour_end],
@@ -946,7 +946,7 @@ def sensor_detail_view(request, device_name):
             """
             SELECT device_name, temperature, humidity, linkquality, max_temperature,
                    temperature_unit, raw_data, timestamp
-            FROM sensor_measurements
+            FROM sensor_data
             WHERE device_name = ANY(%s)
             ORDER BY timestamp DESC
             LIMIT 1
@@ -959,7 +959,7 @@ def sensor_detail_view(request, device_name):
             """
             SELECT device_name, temperature, humidity, linkquality, max_temperature,
                    temperature_unit, raw_data, timestamp
-            FROM sensor_measurements
+            FROM sensor_data
             WHERE device_name = ANY(%s)
               AND timestamp >= NOW() - INTERVAL '7 days'
             ORDER BY timestamp DESC
@@ -973,7 +973,7 @@ def sensor_detail_view(request, device_name):
             """
             SELECT AVG(temperature), MAX(temperature), MIN(temperature),
                    AVG(humidity), MAX(humidity), MIN(humidity), COUNT(*)
-            FROM sensor_measurements
+            FROM sensor_data
             WHERE device_name = ANY(%s)
               AND timestamp >= NOW() - INTERVAL '7 days'
             """,
@@ -983,7 +983,7 @@ def sensor_detail_view(request, device_name):
 
     if not latest_row:
         messages.error(request, f'Dati nav atrasti ierīcei: {device_name}')
-        return redirect('irrigation:sensor_dashboard')
+        return redirect('smart_greenhouse:sensor_dashboard')
 
     latest_reading = _normalize_row({
         'device_name': latest_row[0],
@@ -1050,7 +1050,7 @@ def _insert_sensor_measurement(reading_data, timestamp):
     with connection.cursor() as cursor:
         cursor.execute(
             """
-            INSERT INTO sensor_measurements (
+            INSERT INTO sensor_data (
                 device_name, topic, temperature, humidity, linkquality,
                 battery, max_temperature, min_temperature, temperature_sensitivity,
                 temperature_calibration, temperature_sampling, temperature_unit,
@@ -1200,7 +1200,7 @@ def _feature_enabled(feature_name, default=True):
 def _redirect_feature_disabled(request, feature_title):
     """Redirect user to setup when a feature is disabled."""
     messages.warning(request, f'Funkcija "{feature_title}" ir atspējota aktīvajā siltumnīcā. Iespējojiet to iestatījumos.')
-    return redirect('irrigation:setup')
+    return redirect('smart_greenhouse:setup')
 
 class PlantListView(ListView):
     """List all plants with pagination"""
@@ -1362,7 +1362,7 @@ def create_plant_view(request):
             )
             
             messages.success(request, f'Augs "{plant.name}" veiksmīgi reģistrēts pozīcijā {plant.location_coordinate}!')
-            return redirect('irrigation:plant_detail', plant_id=plant.id)
+            return redirect('smart_greenhouse:plant_detail', plant_id=plant.id)
             
         except ValueError as e:
             messages.error(request, f'Nepareizi dati: {str(e)}')
@@ -1381,7 +1381,7 @@ def edit_plant_view(request, plant_id):
     
     if not plant.active:
         messages.warning(request, 'Nav iespējams rediģēt neaktīvu augu.')
-        return redirect('irrigation:plant_detail', plant_id=plant.id)
+        return redirect('smart_greenhouse:plant_detail', plant_id=plant.id)
     
     if request.method == 'POST':
         try:
@@ -1425,7 +1425,7 @@ def edit_plant_view(request, plant_id):
             plant.save()
             
             messages.success(request, f'Auga "{plant.name}" informācija veiksmīgi atjaunināta!')
-            return redirect('irrigation:plant_detail', plant_id=plant.id)
+            return redirect('smart_greenhouse:plant_detail', plant_id=plant.id)
             
         except ValueError as e:
             messages.error(request, f'Nepareizi dati: {str(e)}')
@@ -1447,7 +1447,7 @@ def deactivate_plant_view(request, plant_id):
         plant.active = False
         plant.save()
         messages.success(request, f'Augs "{plant.name}" veiksmīgi deaktivizēts!')
-        return redirect('irrigation:plant_dashboard')
+        return redirect('smart_greenhouse:plant_dashboard')
     
     return render(request, 'smart_greenhouse/confirm_deactivate_plant.html', {'plant': plant})
 
@@ -1851,7 +1851,7 @@ def setup_greenhouse_view(request):
 
         if not name:
             messages.error(request, 'Siltumnīcas nosaukums ir obligāts.')
-            return redirect('irrigation:setup')
+            return redirect('smart_greenhouse:setup')
 
         if greenhouse_id:
             config = get_object_or_404(GreenhouseConfig, pk=greenhouse_id)
@@ -1871,7 +1871,7 @@ def setup_greenhouse_view(request):
         config.feature_smart_suggestions = feature_smart_suggestions
         config.save()
         messages.success(request, 'Siltumnīcas konfigurācija saglabāta!')
-    return redirect('irrigation:setup')
+    return redirect('smart_greenhouse:setup')
 
 
 def setup_controller_view(request):
@@ -1889,7 +1889,7 @@ def setup_controller_view(request):
 
         if config is None:
             messages.error(request, 'Vispirms jākonfigurē siltumnīcas pamatdati.')
-            return redirect('irrigation:setup')
+            return redirect('smart_greenhouse:setup')
 
         config.controller_ip = controller_ip or None
         config.controller_username = controller_username
@@ -1897,7 +1897,7 @@ def setup_controller_view(request):
             config.controller_password = controller_password
         config.save()
         messages.success(request, 'Kontrollera iestatījumi saglabāti!')
-    return redirect('irrigation:setup')
+    return redirect('smart_greenhouse:setup')
 
 
 @require_http_methods(['POST'])
@@ -1906,7 +1906,7 @@ def setup_select_greenhouse_view(request, greenhouse_id):
     config = get_object_or_404(GreenhouseConfig, pk=greenhouse_id)
     config.set_active()
     messages.success(request, f'"{config.name}" iestatīta kā aktīvā siltumnīca.')
-    return redirect('irrigation:setup')
+    return redirect('smart_greenhouse:setup')
 
 
 @require_http_methods(['POST'])
@@ -1922,7 +1922,7 @@ def setup_delete_greenhouse_view(request, greenhouse_id):
         if remaining:
             remaining.set_active()
     messages.success(request, f'"{name}" dzēsta.')
-    return redirect('irrigation:setup')
+    return redirect('smart_greenhouse:setup')
 
 
 @require_http_methods(['POST'])
@@ -1936,7 +1936,7 @@ def setup_add_device_view(request, greenhouse_id):
 
     if not zigbee_id or not name:
         messages.error(request, 'Zigbee ID un nosaukums ir obligāti.')
-        return redirect('irrigation:setup')
+        return redirect('smart_greenhouse:setup')
 
     try:
         Device.objects.create(
@@ -1949,7 +1949,7 @@ def setup_add_device_view(request, greenhouse_id):
         messages.success(request, f'Ierīce "{name}" pievienota siltumnīcai "{greenhouse.name}".')
     except Exception as exc:
         messages.error(request, f'Kļūda pievienojot ierīci: {exc}')
-    return redirect('irrigation:setup')
+    return redirect('smart_greenhouse:setup')
 
 
 @require_http_methods(['POST'])
@@ -1960,7 +1960,7 @@ def setup_remove_device_view(request, device_id):
     greenhouse_name = device.greenhouse.name
     device.delete()
     messages.success(request, f'Ierīce "{name}" noņemta no siltumnīcas "{greenhouse_name}".')
-    return redirect('irrigation:setup')
+    return redirect('smart_greenhouse:setup')
 
 
 @require_http_methods(['POST'])

@@ -17,10 +17,10 @@
         {% endif %}
     </div>
     <div class="col-auto d-flex gap-2">
-        <a href="{% url 'irrigation:greenhouse_layout' %}" class="btn btn-outline-secondary">
+        <a href="{% url 'smart_greenhouse:greenhouse_layout' %}" class="btn btn-outline-secondary">
             <i class="fas fa-th-large me-1"></i>Izkārtojums
         </a>
-        <a href="{% url 'irrigation:plant_list' %}" class="btn btn-outline-primary">
+        <a href="{% url 'smart_greenhouse:plant_list' %}" class="btn btn-outline-primary">
             <i class="fas fa-list me-1"></i>Visi augi
         </a>
     </div>
@@ -61,7 +61,7 @@
             {% for plant in harvest_ready_plants %}
             <li class="list-group-item d-flex justify-content-between align-items-center">
                 <span>{{ plant.name }}{% if plant.variety %} ({{ plant.variety }}){% endif %}</span>
-                <a href="{% url 'irrigation:plant_detail' plant.id %}" class="btn btn-sm btn-outline-primary">Skatīt</a>
+                <a href="{% url 'smart_greenhouse:plant_detail' plant.id %}" class="btn btn-sm btn-outline-primary">Skatīt</a>
             </li>
             {% endfor %}
         </ul>

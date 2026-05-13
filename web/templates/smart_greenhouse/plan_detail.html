@@ -11,7 +11,7 @@
         <p class="text-muted">{{ plan.id }}</p>
     </div>
     <div class="col-auto">
-        <a href="{% url 'irrigation:cycle_list' %}" class="btn btn-outline-secondary">
+        <a href="{% url 'smart_greenhouse:cycle_list' %}" class="btn btn-outline-secondary">
             <i class="fas fa-arrow-left me-1"></i>Atpakaļ uz plāniem
         </a>
     </div>
@@ -91,7 +91,7 @@
             <div class="card-body">
                 {% if plan.status == 'pending' %}
                 <div class="d-grid gap-2">
-                    <a href="{% url 'irrigation:delete_cycle' plan.id %}" class="btn btn-danger">
+                    <a href="{% url 'smart_greenhouse:delete_cycle' plan.id %}" class="btn btn-danger">
                         <i class="fas fa-trash me-2"></i>Delete Plan
                     </a>
                 </div>

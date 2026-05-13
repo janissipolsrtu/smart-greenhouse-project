@@ -2,7 +2,7 @@ from django.urls import path
 from django.views.generic.base import RedirectView
 from . import views
 
-app_name = 'irrigation'
+app_name = 'smart_greenhouse'
 
 urlpatterns = [
     path('login/', views.login_view, name='login'),
@@ -29,8 +29,8 @@ urlpatterns = [
     path('sensor-data/<str:device_name>/', views.sensor_detail_view, name='sensor_detail'),
 
     # Backward-compatible redirects from old routes
-    path('temperature/', RedirectView.as_view(pattern_name='irrigation:sensor_dashboard', permanent=True)),
-    path('temperature/<str:device_name>/', RedirectView.as_view(pattern_name='irrigation:sensor_detail', permanent=True)),
+    path('temperature/', RedirectView.as_view(pattern_name='smart_greenhouse:sensor_dashboard', permanent=True)),
+    path('temperature/<str:device_name>/', RedirectView.as_view(pattern_name='smart_greenhouse:sensor_detail', permanent=True)),
     
     # Plant Management URLs
     path('plants/', views.plant_dashboard_view, name='plant_dashboard'),

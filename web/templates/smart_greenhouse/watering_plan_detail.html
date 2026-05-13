@@ -9,8 +9,8 @@
         <p class="text-muted">{{ plan.id }}</p>
     </div>
     <div class="col-auto d-flex gap-2">
-        <a href="{% url 'irrigation:create_cycle' %}?plan_id={{ plan.id }}" class="btn btn-primary"><i class="fas fa-plus me-1"></i>Jauns cikls šim plānam</a>
-        <a href="{% url 'irrigation:plan_list' %}" class="btn btn-outline-secondary">Atpakaļ</a>
+        <a href="{% url 'smart_greenhouse:create_cycle' %}?plan_id={{ plan.id }}" class="btn btn-primary"><i class="fas fa-plus me-1"></i>Jauns cikls šim plānam</a>
+        <a href="{% url 'smart_greenhouse:plan_list' %}" class="btn btn-outline-secondary">Atpakaļ</a>
     </div>
 </div>
 
@@ -30,7 +30,7 @@
                             <td>{{ cycle.duration }}s</td>
                             <td>{{ cycle.get_status_display }}</td>
                             <td>
-                                <form method="post" action="{% url 'irrigation:unassign_cycle_from_plan' plan.id cycle.id %}">
+                                <form method="post" action="{% url 'smart_greenhouse:unassign_cycle_from_plan' plan.id cycle.id %}">
                                     {% csrf_token %}
                                     <button class="btn btn-sm btn-outline-warning" type="submit">Noņemt</button>
                                 </form>
@@ -57,7 +57,7 @@
                                 <div><code>{{ cycle.id|truncatechars:28 }}</code></div>
                                 <small class="text-muted">{{ cycle.scheduled_time|date:"Y-m-d H:i" }} | {{ cycle.duration }}s</small>
                             </div>
-                            <form method="post" action="{% url 'irrigation:assign_cycle_to_plan' plan.id cycle.id %}">
+                            <form method="post" action="{% url 'smart_greenhouse:assign_cycle_to_plan' plan.id cycle.id %}">
                                 {% csrf_token %}
                                 <button class="btn btn-sm btn-outline-primary" type="submit">Pievienot</button>
                             </form>

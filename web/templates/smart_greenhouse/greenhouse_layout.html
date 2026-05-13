@@ -568,7 +568,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Add CSRF token
         plantData.csrfmiddlewaretoken = getCsrfToken();
         
-        fetch('{% url "irrigation:plants_api" %}', {
+        fetch('{% url "smart_greenhouse:plants_api" %}', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -599,7 +599,7 @@ document.addEventListener('DOMContentLoaded', function() {
             description: `Ceļš R${row}C${col}`
         };
         
-        fetch('{% url "irrigation:paths_api" %}', {
+        fetch('{% url "smart_greenhouse:paths_api" %}', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -631,10 +631,10 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (type === 'plant') {
             // For plants, redirect to deactivate view
-            window.location.href = `{% url 'irrigation:deactivate_plant' 'PLANT_ID_PLACEHOLDER' %}`.replace('PLANT_ID_PLACEHOLDER', itemId);
+            window.location.href = `{% url 'smart_greenhouse:deactivate_plant' 'PLANT_ID_PLACEHOLDER' %}`.replace('PLANT_ID_PLACEHOLDER', itemId);
         } else {
             // For paths, use DELETE API
-            fetch('{% url "irrigation:paths_api" %}', {
+            fetch('{% url "smart_greenhouse:paths_api" %}', {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',

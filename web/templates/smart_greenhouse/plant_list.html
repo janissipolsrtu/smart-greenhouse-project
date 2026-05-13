@@ -5,7 +5,7 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="h3 mb-0"><i class="fas fa-list me-2"></i>Visi augi</h1>
-    <a href="{% url 'irrigation:create_plant' %}" class="btn btn-primary">
+    <a href="{% url 'smart_greenhouse:create_plant' %}" class="btn btn-primary">
         <i class="fas fa-plus me-1"></i>Pievienot augu
     </a>
 </div>
@@ -48,8 +48,8 @@
                         <td>{{ plant.planting_date }}</td>
                         <td>{{ plant.harvest_date_estimate|default:'-' }}</td>
                         <td class="text-nowrap">
-                            <a href="{% url 'irrigation:plant_detail' plant.id %}" class="btn btn-sm btn-outline-primary">Skatīt</a>
-                            <a href="{% url 'irrigation:edit_plant' plant.id %}" class="btn btn-sm btn-outline-secondary">Rediģēt</a>
+                            <a href="{% url 'smart_greenhouse:plant_detail' plant.id %}" class="btn btn-sm btn-outline-primary">Skatīt</a>
+                            <a href="{% url 'smart_greenhouse:edit_plant' plant.id %}" class="btn btn-sm btn-outline-secondary">Rediģēt</a>
                         </td>
                     </tr>
                     {% endfor %}

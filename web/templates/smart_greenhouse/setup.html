@@ -55,7 +55,7 @@
         {% if gh.is_active %}
           <span class="badge bg-success"><i class="fas fa-check me-1"></i>Aktīva</span>
         {% else %}
-          <form method="post" action="{% url "irrigation:setup_select" gh.pk %}" class="d-inline">
+          <form method="post" action="{% url "smart_greenhouse:setup_select" gh.pk %}" class="d-inline">
             {% csrf_token %}
             <button type="submit" class="btn btn-sm btn-outline-success">Izvēlēties</button>
           </form>
@@ -116,7 +116,7 @@
               <strong>{{ device.name }}</strong>
               <br><code class="text-muted" style="font-size:0.75em">{{ device.zigbee_id }}</code>
             </span>
-            <form method="post" action="{% url 'irrigation:setup_remove_device' device.pk %}"
+            <form method="post" action="{% url 'smart_greenhouse:setup_remove_device' device.pk %}"
                   onsubmit="return confirm('Noņemt ierīci {{ device.name|escapejs }}?')">
               {% csrf_token %}
               <button type="submit" class="btn btn-xs btn-outline-danger btn-sm py-0 px-2" title="Noņemt">
@@ -145,7 +145,7 @@
             <span id="pair-status-{{ gh.pk }}" class="small"></span>
           </div>
           <div id="pair-found-{{ gh.pk }}" class="mb-2"></div>
-          <form method="post" action="{% url 'irrigation:setup_add_device' gh.pk %}"
+          <form method="post" action="{% url 'smart_greenhouse:setup_add_device' gh.pk %}"
                 id="add-device-form-{{ gh.pk }}"
                 onsubmit="submitInlineDeviceForm(event, {{ gh.pk }})">
             {% csrf_token %}
@@ -189,7 +189,7 @@
                 onclick="openControllerModal({{ gh.pk }}, '{{ gh.controller_ip|default:""|escapejs }}', '{{ gh.controller_username|escapejs }}')">
           <i class="fas fa-network-wired me-1"></i>Kontrolleris
         </button>
-        <form method="post" action="{% url "irrigation:setup_delete" gh.pk %}"
+        <form method="post" action="{% url "smart_greenhouse:setup_delete" gh.pk %}"
               class="ms-auto"
               onsubmit="return confirm('Dzēst {{ gh.name|escapejs }}?')">
           {% csrf_token %}
@@ -209,7 +209,7 @@
 <div class="modal fade" id="addGreenhouseModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
-      <form method="post" action="{% url "irrigation:setup_greenhouse" %}">
+      <form method="post" action="{% url "smart_greenhouse:setup_greenhouse" %}">
         {% csrf_token %}
         <input type="hidden" name="greenhouse_id" value="">
         <div class="modal-header">
@@ -266,7 +266,7 @@
 <div class="modal fade" id="editGreenhouseModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
-      <form method="post" action="{% url "irrigation:setup_greenhouse" %}">
+      <form method="post" action="{% url "smart_greenhouse:setup_greenhouse" %}">
         {% csrf_token %}
         <input type="hidden" name="greenhouse_id" id="edit-gh-id">
         <div class="modal-header">
@@ -323,7 +323,7 @@
 <div class="modal fade" id="controllerModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
-      <form method="post" action="{% url "irrigation:setup_controller" %}">
+      <form method="post" action="{% url "smart_greenhouse:setup_controller" %}">
         {% csrf_token %}
         <input type="hidden" name="greenhouse_id" id="ctrl-gh-id">
         <div class="modal-header">
@@ -404,7 +404,7 @@ function setMqttStateBadge(ghId, state, errorText) {
 }
 
 async function refreshGreenhouseMqttState(ghId) {
-  const url = `{% url "irrigation:api_bridge_state" %}?greenhouse_id=${encodeURIComponent(ghId)}`;
+  const url = `{% url "smart_greenhouse:api_bridge_state" %}?greenhouse_id=${encodeURIComponent(ghId)}`;
   try {
     const r = await fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
     let data;
@@ -447,7 +447,7 @@ async function startInlinePairing(ghId) {
 
   try {
     // Start pairing
-    const r1 = await fetch('{% url "irrigation:api_device_pairing" %}', {
+    const r1 = await fetch('{% url "smart_greenhouse:api_device_pairing" %}', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ greenhouse_id: ghId, duration: 60 }),
@@ -457,7 +457,7 @@ async function startInlinePairing(ghId) {
 
     // Check status
     status.innerHTML = '<span class="spinner-border spinner-border-sm text-info"></span> Gaida ierīci…';
-    const r2 = await fetch('{% url "irrigation:api_device_pairing_status" %}', {
+    const r2 = await fetch('{% url "smart_greenhouse:api_device_pairing_status" %}', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ greenhouse_id: ghId, listen_seconds: 8 }),

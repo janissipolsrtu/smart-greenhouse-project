@@ -34,7 +34,7 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
-            <a class="navbar-brand" href="{% url 'irrigation:dashboard' %}">
+            <a class="navbar-brand" href="{% url 'smart_greenhouse:dashboard' %}">
                 <i class="fas fa-home me-2"></i>Gudrā siltumnīca
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -47,22 +47,22 @@
                             <i class="fas fa-layer-group me-1"></i>Laistīšanas plāni
                         </a>
                         <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{% url 'irrigation:plan_list' %}">
+                            <li><a class="dropdown-item" href="{% url 'smart_greenhouse:plan_list' %}">
                                 <i class="fas fa-layer-group me-1"></i>Plāni
                             </a></li>
-                            <li><a class="dropdown-item" href="{% url 'irrigation:cycle_list' %}">
+                            <li><a class="dropdown-item" href="{% url 'smart_greenhouse:cycle_list' %}">
                                 <i class="fas fa-list me-1"></i>Cikli
                             </a></li>
-                            <li><a class="dropdown-item" href="{% url 'irrigation:create_cycle' %}">
+                            <li><a class="dropdown-item" href="{% url 'smart_greenhouse:create_cycle' %}">
                                 <i class="fas fa-tint me-1"></i>Jauns cikls
                             </a></li>
-                            <li><a class="dropdown-item" href="{% url 'irrigation:create_plan' %}">
+                            <li><a class="dropdown-item" href="{% url 'smart_greenhouse:create_plan' %}">
                                 <i class="fas fa-plus me-1"></i>Jauns plāns
                             </a></li>
                         </ul>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'irrigation:sensor_dashboard' %}">
+                        <a class="nav-link" href="{% url 'smart_greenhouse:sensor_dashboard' %}">
                             <i class="fas fa-thermometer-half me-1"></i>Sensori
                         </a>
                     </li>
@@ -73,18 +73,18 @@
                         </a>
                         <ul class="dropdown-menu">
                             {% if feature_plants_enabled %}
-                            <li><a class="dropdown-item" href="{% url 'irrigation:plant_dashboard' %}">
+                            <li><a class="dropdown-item" href="{% url 'smart_greenhouse:plant_dashboard' %}">
                                 <i class="fas fa-chart-pie me-1"></i>Augu Dashboard
                             </a></li>
-                            <li><a class="dropdown-item" href="{% url 'irrigation:plant_list' %}">
+                            <li><a class="dropdown-item" href="{% url 'smart_greenhouse:plant_list' %}">
                                 <i class="fas fa-list me-1"></i>Visi Augi
                             </a></li>
-                            <li><a class="dropdown-item" href="{% url 'irrigation:create_plant' %}">
+                            <li><a class="dropdown-item" href="{% url 'smart_greenhouse:create_plant' %}">
                                 <i class="fas fa-plus me-1"></i>Pievienot Augu
                             </a></li>
                             {% endif %}
                             {% if feature_layout_enabled %}
-                            <li><a class="dropdown-item" href="{% url 'irrigation:greenhouse_layout' %}">
+                            <li><a class="dropdown-item" href="{% url 'smart_greenhouse:greenhouse_layout' %}">
                                 <i class="fas fa-th-large me-1"></i>Siltumnīcas Izkārtojums
                             </a></li>
                             {% endif %}
@@ -92,12 +92,12 @@
                     </li>
                     {% endif %}
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'irrigation:system_status' %}">
+                        <a class="nav-link" href="{% url 'smart_greenhouse:system_status' %}">
                             <i class="fas fa-server me-1"></i>Sistēmas statuss
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'irrigation:setup' %}">
+                        <a class="nav-link" href="{% url 'smart_greenhouse:setup' %}">
                             <i class="fas fa-cog me-1"></i>Iestatījumi
                         </a>
                     </li>
@@ -115,18 +115,18 @@
                         </span>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'irrigation:logout' %}">
+                        <a class="nav-link" href="{% url 'smart_greenhouse:logout' %}">
                             <i class="fas fa-sign-out-alt me-1"></i>Iziet
                         </a>
                     </li>
                     {% else %}
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'irrigation:login' %}">
+                        <a class="nav-link" href="{% url 'smart_greenhouse:login' %}">
                             <i class="fas fa-sign-in-alt me-1"></i>Pieslēgties
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'irrigation:register' %}">
+                        <a class="nav-link" href="{% url 'smart_greenhouse:register' %}">
                             <i class="fas fa-user-plus me-1"></i>Reģistrēties
                         </a>
                     </li>
