@@ -86,15 +86,15 @@ def init_database():
                 conn.execute(text("ALTER TABLE watering_cycle ADD COLUMN greenhouse_config_id INTEGER"))
                 logger.info("Added greenhouse_config_id column to watering_cycle")
 
-                        conn.execute(text(
-                                """
-                                UPDATE watering_cycle wc
-                                SET greenhouse_config_id = wp.greenhouse_config_id
-                                FROM watering_plans wp
-                                WHERE wc.plan_id = wp.id
-                                    AND wc.greenhouse_config_id IS NULL
-                                """
-                        ))
+            conn.execute(text(
+                """
+                UPDATE watering_cycle wc
+                SET greenhouse_config_id = wp.greenhouse_config_id
+                FROM watering_plans wp
+                WHERE wc.plan_id = wp.id
+                  AND wc.greenhouse_config_id IS NULL
+                """
+            ))
 
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_watering_cycle_plan_id ON watering_cycle (plan_id)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_watering_cycle_greenhouse_config_id ON watering_cycle (greenhouse_config_id)"))
@@ -180,6 +180,63 @@ def init_database():
 
             conn.execute(text("CREATE INDEX IF NOT EXISTS idx_sensor_timestamp ON sensor_data(timestamp DESC)"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS idx_sensor_device_timestamp ON sensor_data(device_name, timestamp DESC)"))
+
+            # Seasons and plant-greenhouse linkage compatibility.
+            conn.execute(text(
+                """
+                CREATE TABLE IF NOT EXISTS seasons (
+                    id SERIAL PRIMARY KEY,
+                    greenhouse_id VARCHAR NOT NULL,
+                    name VARCHAR(120) NOT NULL,
+                    start_date DATE,
+                    end_date DATE,
+                    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CONSTRAINT seasons_greenhouse_name_key UNIQUE (greenhouse_id, name)
+                )
+                """
+            ))
+            conn.execute(text(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'seasons_greenhouse_id_fkey') THEN
+                        ALTER TABLE seasons
+                        ADD CONSTRAINT seasons_greenhouse_id_fkey
+                        FOREIGN KEY (greenhouse_id)
+                        REFERENCES greenhouses(id)
+                        ON DELETE CASCADE;
+                    END IF;
+                END $$;
+                """
+            ))
+            conn.execute(text("ALTER TABLE plants ADD COLUMN IF NOT EXISTS greenhouse_id VARCHAR"))
+            conn.execute(text("ALTER TABLE plants ADD COLUMN IF NOT EXISTS season_id INTEGER"))
+            conn.execute(text(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'plants_greenhouse_id_fkey') THEN
+                        ALTER TABLE plants
+                        ADD CONSTRAINT plants_greenhouse_id_fkey
+                        FOREIGN KEY (greenhouse_id)
+                        REFERENCES greenhouses(id)
+                        ON DELETE SET NULL;
+                    END IF;
+                    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'plants_season_id_fkey') THEN
+                        ALTER TABLE plants
+                        ADD CONSTRAINT plants_season_id_fkey
+                        FOREIGN KEY (season_id)
+                        REFERENCES seasons(id)
+                        ON DELETE SET NULL;
+                    END IF;
+                END $$;
+                """
+            ))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_plants_greenhouse_id ON plants (greenhouse_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_plants_season_id ON plants (season_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_seasons_greenhouse_id ON seasons (greenhouse_id)"))
 
             # NOTE: sensor_measurements table has been consolidated into sensor_data.
             # All sensor data is now stored in sensor_data table for simplified management.

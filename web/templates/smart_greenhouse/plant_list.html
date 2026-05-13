@@ -5,9 +5,12 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1 class="h3 mb-0"><i class="fas fa-list me-2"></i>Visi augi</h1>
-    <a href="{% url 'smart_greenhouse:create_plant' %}" class="btn btn-primary">
-        <i class="fas fa-plus me-1"></i>Pievienot augu
-    </a>
+    <div class="d-flex gap-2 align-items-center">
+        {% include "smart_greenhouse/includes/greenhouse_switcher.html" %}
+        <a href="{% url 'smart_greenhouse:create_plant' %}" class="btn btn-primary">
+            <i class="fas fa-plus me-1"></i>Pievienot augu
+        </a>
+    </div>
 </div>
 
 <form method="get" class="row g-2 mb-3">
@@ -31,6 +34,8 @@
                 <thead>
                     <tr>
                         <th>Nosaukums</th>
+                        <th>Siltumnīca</th>
+                        <th>Sezona</th>
                         <th>Pozīcija</th>
                         <th>Stādīts</th>
                         <th>Raža</th>
@@ -43,6 +48,24 @@
                         <td>
                             <strong>{{ plant.name }}</strong>
                             {% if plant.variety %}<div class="small text-muted">{{ plant.variety }}</div>{% endif %}
+                        </td>
+                        <td>
+                            {% if plant.greenhouse_id %}
+                                {% for gh in all_greenhouses %}
+                                    {% if gh.greenhouse_id == plant.greenhouse_id %}
+                                        {{ gh.name }}
+                                    {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if plant.season %}
+                                {{ plant.season.name }}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
                         </td>
                         <td>{{ plant.location_coordinate }}</td>
                         <td>{{ plant.planting_date }}</td>

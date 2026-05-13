@@ -17,6 +17,7 @@
         {% endif %}
     </div>
     <div class="col-auto d-flex gap-2">
+        {% include "smart_greenhouse/includes/greenhouse_switcher.html" %}
         <a href="{% url 'smart_greenhouse:greenhouse_layout' %}" class="btn btn-outline-secondary">
             <i class="fas fa-th-large me-1"></i>Izkārtojums
         </a>

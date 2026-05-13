@@ -135,6 +135,8 @@ class PlantBase(BaseModel):
     water_amount_ml: Optional[int] = None  # Milliliters per watering (FR-13)
     harvest_date_estimate: Optional[date] = None  # Expected harvest date (FR-14)
     harvest_quantity_estimate: Optional[float] = None  # Expected quantity in kg (FR-14)
+    greenhouse_id: Optional[str] = None
+    season_id: Optional[int] = None
     location_row: int  # Greenhouse row number (FR-15)
     location_column: int  # Greenhouse column number (FR-15)
     location_description: Optional[str] = None  # Additional location info (FR-15)
@@ -153,6 +155,8 @@ class PlantUpdate(BaseModel):
     water_amount_ml: Optional[int] = None
     harvest_date_estimate: Optional[date] = None
     harvest_quantity_estimate: Optional[float] = None
+    greenhouse_id: Optional[str] = None
+    season_id: Optional[int] = None
     location_row: Optional[int] = None
     location_column: Optional[int] = None
     location_description: Optional[str] = None
@@ -1286,6 +1290,8 @@ async def create_plant(plant: PlantCreate):
             name=plant.name,
             variety=plant.variety,
             planting_date=plant.planting_date,
+            greenhouse_id=plant.greenhouse_id,
+            season_id=plant.season_id,
             watering_frequency=plant.watering_frequency,
             watering_duration=plant.watering_duration,
             water_amount_ml=plant.water_amount_ml,
@@ -1315,6 +1321,7 @@ async def create_plant(plant: PlantCreate):
 @app.get("/api/plants", response_model=ApiResponse, tags=["Plant Management"])
 async def get_all_plants(
     active_only: bool = True,
+    greenhouse_id: Optional[str] = None,
     limit: int = 100,
     offset: int = 0
 ):
@@ -1322,6 +1329,7 @@ async def get_all_plants(
     try:
         plants = PlantService.get_all_plants(
             active_only=active_only,
+            greenhouse_id=greenhouse_id,
             limit=limit,
             offset=offset
         )
@@ -1335,6 +1343,7 @@ async def get_all_plants(
                 "plants": plants_data,
                 "count": len(plants_data),
                 "active_only": active_only,
+                "greenhouse_id": greenhouse_id,
                 "limit": limit,
                 "offset": offset
             }
@@ -1427,10 +1436,10 @@ async def delete_plant(plant_id: str):
         raise HTTPException(status_code=500, detail=f"Failed to remove plant: {str(e)}")
 
 @app.get("/api/plants/location/{row}/{column}", response_model=ApiResponse, tags=["Plant Management"])
-async def get_plant_at_location(row: int, column: int):
+async def get_plant_at_location(row: int, column: int, greenhouse_id: Optional[str] = None):
     """Get plant at specific greenhouse location (FR-15)"""
     try:
-        plants = PlantService.get_plants_by_location(row=row, column=column)
+        plants = PlantService.get_plants_by_location(row=row, column=column, greenhouse_id=greenhouse_id)
         
         if not plants:
             return ApiResponse(
@@ -1462,14 +1471,16 @@ async def get_plant_at_location(row: int, column: int):
 async def search_plants(
     name: str = None,
     variety: str = None,
-    active_only: bool = True
+    active_only: bool = True,
+    greenhouse_id: Optional[str] = None,
 ):
     """Search plants by name or variety"""
     try:
         plants = PlantService.search_plants(
             name=name,
             variety=variety,
-            active_only=active_only
+            active_only=active_only,
+            greenhouse_id=greenhouse_id,
         )
         
         plants_data = [plant.to_dict() for plant in plants]
@@ -1482,7 +1493,8 @@ async def search_plants(
                 "search_criteria": {
                     "name": name,
                     "variety": variety,
-                    "active_only": active_only
+                    "active_only": active_only,
+                    "greenhouse_id": greenhouse_id,
                 }
             }
         )
@@ -1492,10 +1504,10 @@ async def search_plants(
         raise HTTPException(status_code=500, detail=f"Failed to search plants: {str(e)}")
 
 @app.get("/api/greenhouse/layout", response_model=ApiResponse, tags=["Plant Management"])
-async def get_greenhouse_layout(max_rows: int = 10, max_columns: int = 10):
+async def get_greenhouse_layout(max_rows: int = 10, max_columns: int = 10, greenhouse_id: Optional[str] = None):
     """Get complete greenhouse layout with plant positions (FR-15)"""
     try:
-        layout = PlantService.get_greenhouse_layout(max_rows=max_rows, max_columns=max_columns)
+        layout = PlantService.get_greenhouse_layout(max_rows=max_rows, max_columns=max_columns, greenhouse_id=greenhouse_id)
         
         return ApiResponse(
             success=True,
@@ -1504,7 +1516,8 @@ async def get_greenhouse_layout(max_rows: int = 10, max_columns: int = 10):
                 "layout": layout,
                 "dimensions": {
                     "max_rows": max_rows,
-                    "max_columns": max_columns
+                    "max_columns": max_columns,
+                    "greenhouse_id": greenhouse_id,
                 }
             }
         )
@@ -1514,10 +1527,10 @@ async def get_greenhouse_layout(max_rows: int = 10, max_columns: int = 10):
         raise HTTPException(status_code=500, detail=f"Failed to retrieve greenhouse layout: {str(e)}")
 
 @app.get("/api/plants/harvest-ready", response_model=ApiResponse, tags=["Plant Management"])
-async def get_plants_ready_for_harvest():
+async def get_plants_ready_for_harvest(greenhouse_id: Optional[str] = None):
     """Get plants that are ready for harvest (FR-14)"""
     try:
-        plants = PlantService.get_plants_ready_for_harvest()
+        plants = PlantService.get_plants_ready_for_harvest(greenhouse_id=greenhouse_id)
         plants_data = [plant.to_dict() for plant in plants]
         
         return ApiResponse(

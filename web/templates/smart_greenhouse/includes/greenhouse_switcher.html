@@ -1,0 +1,29 @@
+{% if all_greenhouses|length > 1 %}
+<div class="dropdown">
+  <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+    <i class="fas fa-exchange-alt me-1"></i>{{ switcher_label|default:"Mainīt siltumnīcu" }}
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    {% for gh in all_greenhouses %}
+    <li>
+      {% if gh.selected %}
+        <span class="dropdown-item active">
+          <i class="fas fa-check me-2"></i>{{ gh.name }}
+          {% if gh.location %}<small class="text-muted d-block ms-4">{{ gh.location }}</small>{% endif %}
+        </span>
+      {% else %}
+        <form method="post" action="{% url 'smart_greenhouse:setup_select' gh.pk %}" class="d-inline">
+          {% csrf_token %}
+          <button type="submit" class="dropdown-item">
+            {{ gh.name }}
+            {% if gh.location %}<small class="text-muted d-block">{{ gh.location }}</small>{% endif %}
+          </button>
+        </form>
+      {% endif %}
+    </li>
+    {% endfor %}
+    <li><hr class="dropdown-divider"></li>
+    <li><a class="dropdown-item" href="{% url 'smart_greenhouse:setup' %}"><i class="fas fa-cog me-2"></i>Pārvaldīt siltumnīcas</a></li>
+  </ul>
+</div>
+{% endif %}

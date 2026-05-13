@@ -1,4 +1,5 @@
 ﻿{% extends 'base.html' %}
+{% load custom_filters %}
 
 {% block title %}Siltumnīcu iestatīšana – Gudrā siltumnīca{% endblock %}
 
@@ -175,6 +176,83 @@
                 </button>
                 <button type="button" class="btn btn-sm btn-secondary"
                         onclick="toggleAddDevicePanel({{ gh.pk }})">Atcelt</button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        {# Seasons #}
+        <hr class="my-2">
+        <div class="d-flex align-items-center justify-content-between mb-1">
+          <small class="fw-semibold text-muted"><i class="fas fa-calendar me-1"></i>Sezonas</small>
+          <button class="btn btn-xs btn-outline-primary btn-sm py-0 px-2"
+                  onclick="toggleAddSeasonPanel({{ gh.pk }})">
+            <i class="fas fa-plus me-1"></i>Pievienot
+          </button>
+        </div>
+        {% with seasons=seasons_by_gh|get_item:gh.pk %}
+        {% if seasons %}
+        <ul class="list-group list-group-flush small" id="season-list-{{ gh.pk }}">
+          {% for season in seasons %}
+          <li class="list-group-item px-0 py-2 d-flex align-items-center gap-2">
+            <div class="flex-grow-1">
+              <strong>{{ season.name }}</strong>
+              {% if season.is_active %}<span class="badge bg-success-subtle text-success small">Aktīva</span>{% endif %}
+              {% if season.start_date or season.end_date %}
+              <br><small class="text-muted">
+                {% if season.start_date %}{{ season.start_date|date:"Y-m-d" }}{% endif %}
+                {% if season.start_date and season.end_date %} – {% endif %}
+                {% if season.end_date %}{{ season.end_date|date:"Y-m-d" }}{% endif %}
+              </small>
+              {% endif %}
+            </div>
+            <button type="button" class="btn btn-xs btn-outline-secondary btn-sm py-0 px-2"
+                    onclick="openEditSeasonModal({{ season.pk }}, '{{ season.name|escapejs }}', '{{ season.start_date|date:'Y-m-d'|default:'' }}', '{{ season.end_date|date:'Y-m-d'|default:'' }}', {{ season.is_active|yesno:'true,false' }})"
+                    title="Rediģēt">
+              <i class="fas fa-edit"></i>
+            </button>
+            <form method="post" action="{% url 'smart_greenhouse:setup_delete_season' season.pk %}"
+                  onsubmit="return confirm('Dzēst sezonu {{ season.name|escapejs }}?')">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-xs btn-outline-danger btn-sm py-0 px-2" title="Dzēst">
+                <i class="fas fa-trash"></i>
+              </button>
+            </form>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted small mb-0" id="season-list-{{ gh.pk }}">Nav pievienotu sezonu.</p>
+        {% endif %}
+        {% endwith %}
+
+        {# Inline add-season panel #}
+        <div id="add-season-panel-{{ gh.pk }}" class="mt-2 p-2 border rounded bg-light" style="display:none;">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <small class="fw-semibold"><i class="fas fa-calendar text-primary me-1"></i>Pievienot sezonu</small>
+            <button type="button" class="btn-close btn-sm" onclick="toggleAddSeasonPanel({{ gh.pk }})"></button>
+          </div>
+          <form method="post" action="{% url 'smart_greenhouse:setup_add_season' gh.pk %}">
+            {% csrf_token %}
+            <div class="row g-2">
+              <div class="col-12">
+                <input type="text" name="name" class="form-control form-control-sm"
+                       placeholder="Sezonas nosaukums *" required>
+              </div>
+              <div class="col-6">
+                <input type="date" name="start_date" class="form-control form-control-sm"
+                       placeholder="Sākuma datums">
+              </div>
+              <div class="col-6">
+                <input type="date" name="end_date" class="form-control form-control-sm"
+                       placeholder="Beigu datums">
+              </div>
+              <div class="col-12 d-flex gap-2">
+                <button type="submit" class="btn btn-sm btn-primary">
+                  <i class="fas fa-save me-1"></i>Saglabāt
+                </button>
+                <button type="button" class="btn btn-sm btn-secondary"
+                        onclick="toggleAddSeasonPanel({{ gh.pk }})">Atcelt</button>
               </div>
             </div>
           </form>
@@ -359,6 +437,43 @@
   </div>
 </div>
 
+<!-- Edit season modal -->
+<div class="modal fade" id="editSeasonModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="{% url "smart_greenhouse:setup_update_season" 1 %}" id="edit-season-form">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="fas fa-calendar me-2"></i>Rediģēt sezonu</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Nosaukums <span class="text-danger">*</span></label>
+            <input type="text" name="name" id="edit-season-name" class="form-control" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Sākuma datums</label>
+            <input type="date" name="start_date" id="edit-season-start-date" class="form-control">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Beigu datums</label>
+            <input type="date" name="end_date" id="edit-season-end-date" class="form-control">
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="is_active" id="edit-season-active">
+            <label class="form-check-label" for="edit-season-active">Aktīvā sezona</label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Atcelt</button>
+          <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i>Saglabāt</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -528,6 +643,30 @@ async function submitInlineDeviceForm(e, ghId) {
     btn.innerHTML = orig;
     alert(`Kļūda: ${err.message}`);
   }
+}
+
+// ── Inline season management panel ─────────────────────────────────────────
+function toggleAddSeasonPanel(ghId) {
+  const panel = document.getElementById(`add-season-panel-${ghId}`);
+  if (!panel) return;
+  const visible = panel.style.display !== 'none';
+  panel.style.display = visible ? 'none' : 'block';
+  if (!visible) {
+    // reset form when opening
+    const form = panel.querySelector('form');
+    if (form) form.reset();
+  }
+}
+
+function openEditSeasonModal(seasonId, name, startDate, endDate, isActive) {
+  document.getElementById('edit-season-name').value = name;
+  document.getElementById('edit-season-start-date').value = startDate;
+  document.getElementById('edit-season-end-date').value = endDate;
+  document.getElementById('edit-season-active').checked = Boolean(isActive);
+  // Update form action to point to the correct season update URL
+  const form = document.getElementById('edit-season-form');
+  form.action = `/smart-greenhouse/setup/season/${seasonId}/update/`;
+  new bootstrap.Modal(document.getElementById('editSeasonModal')).show();
 }
 
 // ── Init ───────────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 """Database service for plant operations"""
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, desc, asc, or_
+from sqlalchemy import and_, desc, asc, or_, text
 from datetime import datetime, date
 from typing import List, Optional, Dict
 import logging
@@ -14,6 +14,39 @@ logger = logging.getLogger(__name__)
 
 class PlantService:
     """Service class for plant database operations"""
+
+    @staticmethod
+    def _resolve_default_greenhouse_id(db: Session) -> Optional[str]:
+        row = db.execute(
+            text(
+                """
+                SELECT greenhouse_id
+                FROM greenhouse_config
+                WHERE COALESCE(greenhouse_id, '') <> ''
+                ORDER BY selected DESC, id ASC
+                LIMIT 1
+                """
+            )
+        ).first()
+        return row[0] if row and row[0] else None
+
+    @staticmethod
+    def _resolve_active_season_id(db: Session, greenhouse_id: Optional[str]) -> Optional[int]:
+        if not greenhouse_id:
+            return None
+        row = db.execute(
+            text(
+                """
+                SELECT id
+                FROM seasons
+                WHERE greenhouse_id = :greenhouse_id
+                ORDER BY is_active DESC, id ASC
+                LIMIT 1
+                """
+            ),
+            {"greenhouse_id": greenhouse_id},
+        ).first()
+        return int(row[0]) if row and row[0] is not None else None
     
     @staticmethod
     def create_plant(
@@ -21,6 +54,8 @@ class PlantService:
         planting_date: date,
         location_row: int,
         location_column: int,
+        greenhouse_id: str = None,
+        season_id: int = None,
         variety: str = None,
         watering_frequency: int = 1,
         watering_duration: int = 300,
@@ -34,11 +69,16 @@ class PlantService:
         """Create a new plant registration"""
         db = SessionLocal()
         try:
+            greenhouse_id = greenhouse_id or PlantService._resolve_default_greenhouse_id(db)
+            if season_id is None:
+                season_id = PlantService._resolve_active_season_id(db, greenhouse_id)
+
             # Check if location is already occupied
             existing_plant = db.query(Plant).filter(
                 and_(
                     Plant.location_row == location_row,
                     Plant.location_column == location_column,
+                    Plant.greenhouse_id == greenhouse_id,
                     Plant.active == True
                 )
             ).first()
@@ -61,6 +101,8 @@ class PlantService:
                 water_amount_ml=water_amount_ml,
                 harvest_date_estimate=harvest_date_estimate,
                 harvest_quantity_estimate=harvest_quantity_estimate,
+                greenhouse_id=greenhouse_id,
+                season_id=season_id,
                 location_row=location_row,
                 location_column=location_column,
                 location_description=location_description,
@@ -93,7 +135,7 @@ class PlantService:
             db.close()
     
     @staticmethod
-    def get_all_plants(active_only: bool = False, limit: int = 100, offset: int = 0) -> List[Plant]:
+    def get_all_plants(active_only: bool = False, limit: int = 100, offset: int = 0, greenhouse_id: str = None) -> List[Plant]:
         """Get all plants with pagination"""
         db = SessionLocal()
         try:
@@ -101,6 +143,8 @@ class PlantService:
             
             if active_only:
                 query = query.filter(Plant.active == True)
+            if greenhouse_id:
+                query = query.filter(Plant.greenhouse_id == greenhouse_id)
             
             query = query.order_by(desc(Plant.created_at))
             
@@ -118,7 +162,7 @@ class PlantService:
             db.close()
     
     @staticmethod
-    def get_plants_by_location(row: int = None, column: int = None) -> List[Plant]:
+    def get_plants_by_location(row: int = None, column: int = None, greenhouse_id: str = None) -> List[Plant]:
         """Get plants by greenhouse location"""
         db = SessionLocal()
         try:
@@ -128,6 +172,8 @@ class PlantService:
                 query = query.filter(Plant.location_row == row)
             if column is not None:
                 query = query.filter(Plant.location_column == column)
+            if greenhouse_id:
+                query = query.filter(Plant.greenhouse_id == greenhouse_id)
                 
             plants = query.order_by(Plant.location_row, Plant.location_column).all()
             return plants
@@ -141,7 +187,8 @@ class PlantService:
     def search_plants(
         name: str = None,
         variety: str = None,
-        active_only: bool = True
+        active_only: bool = True,
+        greenhouse_id: str = None,
     ) -> List[Plant]:
         """Search plants by name or variety"""
         db = SessionLocal()
@@ -150,6 +197,8 @@ class PlantService:
             
             if active_only:
                 query = query.filter(Plant.active == True)
+            if greenhouse_id:
+                query = query.filter(Plant.greenhouse_id == greenhouse_id)
             
             if name or variety:
                 filters = []
@@ -180,6 +229,7 @@ class PlantService:
             if 'location_row' in kwargs or 'location_column' in kwargs:
                 new_row = kwargs.get('location_row', plant.location_row)
                 new_column = kwargs.get('location_column', plant.location_column)
+                new_greenhouse_id = kwargs.get('greenhouse_id', plant.greenhouse_id)
                 
                 # Only check if location actually changed
                 if new_row != plant.location_row or new_column != plant.location_column:
@@ -187,6 +237,7 @@ class PlantService:
                         and_(
                             Plant.location_row == new_row,
                             Plant.location_column == new_column,
+                            Plant.greenhouse_id == new_greenhouse_id,
                             Plant.active == True,
                             Plant.id != plant_id  # Exclude current plant
                         )
@@ -232,11 +283,14 @@ class PlantService:
             db.close()
     
     @staticmethod
-    def get_greenhouse_layout(max_rows: int = 10, max_columns: int = 10) -> Dict:
+    def get_greenhouse_layout(max_rows: int = 10, max_columns: int = 10, greenhouse_id: str = None) -> Dict:
         """Get greenhouse layout with plant positions"""
         db = SessionLocal()
         try:
-            plants = db.query(Plant).filter(Plant.active == True).all()
+            query = db.query(Plant).filter(Plant.active == True)
+            if greenhouse_id:
+                query = query.filter(Plant.greenhouse_id == greenhouse_id)
+            plants = query.all()
             
             layout = {}
             for row in range(1, max_rows + 1):
@@ -262,7 +316,7 @@ class PlantService:
             db.close()
     
     @staticmethod
-    def get_plants_ready_for_harvest() -> List[Plant]:
+    def get_plants_ready_for_harvest(greenhouse_id: str = None) -> List[Plant]:
         """Get plants that are ready for harvest"""
         db = SessionLocal()
         try:
@@ -272,7 +326,10 @@ class PlantService:
                     Plant.active == True,
                     Plant.harvest_date_estimate <= today
                 )
-            ).order_by(Plant.harvest_date_estimate).all()
+            )
+            if greenhouse_id:
+                plants = plants.filter(Plant.greenhouse_id == greenhouse_id)
+            plants = plants.order_by(Plant.harvest_date_estimate).all()
             return plants
         except Exception as e:
             logger.error(f"Error getting plants ready for harvest: {e}")

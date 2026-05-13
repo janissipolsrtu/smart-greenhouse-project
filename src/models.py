@@ -111,6 +111,32 @@ class Greenhouse(Base):
         return payload
 
 
+class Season(Base):
+    """Database model for greenhouse seasons."""
+    __tablename__ = "seasons"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    greenhouse_id = Column(String, ForeignKey("greenhouses.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(120), nullable=False)
+    start_date = Column(Date, nullable=True)
+    end_date = Column(Date, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False, index=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "greenhouse_id": self.greenhouse_id,
+            "name": self.name,
+            "start_date": self.start_date.isoformat() if self.start_date else None,
+            "end_date": self.end_date.isoformat() if self.end_date else None,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
 class Plant(Base):
     """Database model for plant registration and management"""
     __tablename__ = "plants"
@@ -124,6 +150,8 @@ class Plant(Base):
     water_amount_ml = Column(Integer, nullable=True)  # Milliliters per watering (FR-13)
     harvest_date_estimate = Column(Date, nullable=True)  # Expected harvest date (FR-14)
     harvest_quantity_estimate = Column(Float, nullable=True)  # Expected quantity in kg (FR-14)
+    greenhouse_id = Column(String, ForeignKey("greenhouses.id", ondelete="SET NULL"), nullable=True, index=True)
+    season_id = Column(Integer, ForeignKey("seasons.id", ondelete="SET NULL"), nullable=True, index=True)
     location_row = Column(Integer, nullable=False)  # Greenhouse row number (FR-15)
     location_column = Column(Integer, nullable=False)  # Greenhouse column number (FR-15)
     location_description = Column(String(200), nullable=True)  # Additional location info (FR-15)
@@ -147,6 +175,8 @@ class Plant(Base):
             "water_amount_ml": self.water_amount_ml,
             "harvest_date_estimate": self.harvest_date_estimate.isoformat() if self.harvest_date_estimate else None,
             "harvest_quantity_estimate": self.harvest_quantity_estimate,
+            "greenhouse_id": self.greenhouse_id,
+            "season_id": self.season_id,
             "location_row": self.location_row,
             "location_column": self.location_column,
             "location_description": self.location_description,

@@ -16,7 +16,7 @@ from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 import os
-from .models import WateringPlan, WateringCycle, SensorData, Plant, PathCell, GreenhouseConfig, Device, DeviceType
+from .models import WateringPlan, WateringCycle, SensorData, Plant, PathCell, GreenhouseConfig, Device, DeviceType, Season
 from .forms import RegistrationForm
 import uuid
 import time
@@ -33,6 +33,11 @@ class WateringCycleListView(ListView):
     
     def get_queryset(self):
         return WateringCycle.objects.all().order_by('-scheduled_time')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['all_greenhouses'] = GreenhouseConfig.objects.all().order_by('name')
+        return context
 
 
 @require_http_methods(["GET", "POST"])
@@ -135,7 +140,12 @@ def dashboard_view(request):
 
     # Greenhouse context
     active_greenhouse = GreenhouseConfig.get_config()
+    active_greenhouse_id = active_greenhouse.greenhouse_id if active_greenhouse else None
     all_greenhouses = GreenhouseConfig.objects.all().order_by('name')
+
+    plant_base_qs = Plant.objects.filter(active=True)
+    if active_greenhouse_id:
+        plant_base_qs = plant_base_qs.filter(greenhouse_id=active_greenhouse_id)
 
     # Get statistics
     total_cycles = WateringCycle.objects.count()
@@ -143,6 +153,12 @@ def dashboard_view(request):
     completed_cycles = WateringCycle.objects.filter(status='completed').count()
     failed_cycles = WateringCycle.objects.filter(status='failed').count()
     total_plan_containers = WateringPlan.objects.count()
+    
+    # Get total plants for the active greenhouse
+    total_plants = plant_base_qs.count()
+    
+    # Check if layout feature is enabled for the active greenhouse
+    feature_layout_enabled = active_greenhouse.feature_layout if active_greenhouse else False
     
     # Get upcoming cycles (next 24 hours)
     upcoming_cycles = WateringCycle.objects.filter(
@@ -296,6 +312,8 @@ def dashboard_view(request):
         'total_plan_containers': total_plan_containers,
         'active_greenhouse': active_greenhouse,
         'all_greenhouses': all_greenhouses,
+        'total_plants': total_plants,
+        'feature_layout_enabled': feature_layout_enabled,
         'grid_data': grid_data,
         'max_rows': max_rows,
         'max_columns': max_columns,
@@ -1217,6 +1235,11 @@ class PlantListView(ListView):
     def get_queryset(self):
         queryset = Plant.objects.filter(active=True).order_by('-created_at')
         
+        # Filter by active greenhouse
+        active_greenhouse = GreenhouseConfig.get_config()
+        if active_greenhouse and active_greenhouse.greenhouse_id:
+            queryset = queryset.filter(greenhouse_id=active_greenhouse.greenhouse_id)
+        
         # Add search functionality
         search_query = self.request.GET.get('search')
         if search_query:
@@ -1231,7 +1254,15 @@ class PlantListView(ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['search_query'] = self.request.GET.get('search', '')
-        context['total_plants'] = Plant.objects.filter(active=True).count()
+        
+        # Get count for active greenhouse only
+        active_greenhouse = GreenhouseConfig.get_config()
+        total_qs = Plant.objects.filter(active=True)
+        if active_greenhouse and active_greenhouse.greenhouse_id:
+            total_qs = total_qs.filter(greenhouse_id=active_greenhouse.greenhouse_id)
+        context['total_plants'] = total_qs.count()
+        context['active_greenhouse'] = active_greenhouse
+        context['all_greenhouses'] = GreenhouseConfig.objects.all().order_by('name')
         return context
 
 
@@ -1245,33 +1276,33 @@ def plant_dashboard_view(request):
     
     # Greenhouse context
     active_greenhouse = GreenhouseConfig.get_config()
+    active_greenhouse_id = active_greenhouse.greenhouse_id if active_greenhouse else None
     all_greenhouses = GreenhouseConfig.objects.all().order_by('name')
+
+    plant_base_qs = Plant.objects.filter(active=True)
+    if active_greenhouse_id:
+        plant_base_qs = plant_base_qs.filter(greenhouse_id=active_greenhouse_id)
     
     # Get plant statistics
-    total_plants = Plant.objects.filter(active=True).count()
-    plants_ready_for_harvest = Plant.objects.filter(
-        active=True,
+    total_plants = plant_base_qs.count()
+    plants_ready_for_harvest = plant_base_qs.filter(
         harvest_date_estimate__lte=today
     ).count()
     
-    recently_planted = Plant.objects.filter(
-        active=True,
+    recently_planted = plant_base_qs.filter(
         planting_date__gte=today - timezone.timedelta(days=7)
     ).count()
     
     # Get plants ready for harvest
-    harvest_ready_plants = Plant.objects.filter(
-        active=True,
+    harvest_ready_plants = plant_base_qs.filter(
         harvest_date_estimate__lte=today
     ).order_by('harvest_date_estimate')[:5]
     
     # Get recently planted plants
-    recent_plants = Plant.objects.filter(
-        active=True
-    ).order_by('-planting_date')[:5]
+    recent_plants = plant_base_qs.order_by('-planting_date')[:5]
     
     # Get greenhouse layout summary (first 5x5 for overview)
-    layout_summary = get_greenhouse_layout_summary(max_rows=5, max_columns=5)
+    layout_summary = get_greenhouse_layout_summary(max_rows=5, max_columns=5, greenhouse_id=active_greenhouse_id)
     
     context = {
         'total_plants': total_plants,
@@ -1310,6 +1341,14 @@ def create_plant_view(request):
 
     if request.method == 'POST':
         try:
+            active_greenhouse = GreenhouseConfig.get_config()
+            greenhouse_id = active_greenhouse.greenhouse_id if active_greenhouse else None
+            season_obj = None
+            if greenhouse_id:
+                season_obj = Season.objects.filter(greenhouse_id=greenhouse_id, is_active=True).order_by('id').first()
+                if season_obj is None:
+                    season_obj = Season.objects.filter(greenhouse_id=greenhouse_id).order_by('id').first()
+
             # Extract form data
             name = request.POST.get('name').strip()
             variety = request.POST.get('variety', '').strip() or None
@@ -1335,11 +1374,14 @@ def create_plant_view(request):
             planting_date = datetime.fromisoformat(planting_date).date()
             
             # Check if location is already occupied
-            existing_plant = Plant.objects.filter(
+            existing_plant_qs = Plant.objects.filter(
                 location_row=location_row,
                 location_column=location_column,
                 active=True
-            ).first()
+            )
+            if greenhouse_id:
+                existing_plant_qs = existing_plant_qs.filter(greenhouse_id=greenhouse_id)
+            existing_plant = existing_plant_qs.first()
             
             if existing_plant:
                 messages.error(request, f'Atrašanās vieta R{location_row}C{location_column} jau ir aizņemta ar augu: {existing_plant.name}')
@@ -1350,6 +1392,8 @@ def create_plant_view(request):
                 name=name,
                 variety=variety,
                 planting_date=planting_date,
+                greenhouse_id=greenhouse_id,
+                season=season_obj,
                 location_row=location_row,
                 location_column=location_column,
                 watering_frequency=watering_frequency,
@@ -1398,6 +1442,7 @@ def edit_plant_view(request, plant_id):
                 existing_plant = Plant.objects.filter(
                     location_row=new_location_row,
                     location_column=new_location_column,
+                    greenhouse_id=plant.greenhouse_id,
                     active=True
                 ).exclude(id=plant.id).first()
                 
@@ -1499,6 +1544,8 @@ def greenhouse_layout_view(request):
     
     # Get all active plants and path cells
     plants = Plant.objects.filter(active=True)
+    if active_greenhouse and active_greenhouse.greenhouse_id:
+        plants = plants.filter(greenhouse_id=active_greenhouse.greenhouse_id)
     paths = PathCell.objects.all()
     
     # Create a simple grid structure for the template
@@ -1556,9 +1603,11 @@ def greenhouse_layout_view(request):
     return render(request, 'smart_greenhouse/greenhouse_layout.html', context)
 
 
-def get_greenhouse_layout_summary(max_rows=10, max_columns=10):
+def get_greenhouse_layout_summary(max_rows=10, max_columns=10, greenhouse_id=None):
     """Helper function to generate greenhouse layout data"""
-    plants = Plant.objects.filter(active=True) 
+    plants = Plant.objects.filter(active=True)
+    if greenhouse_id:
+        plants = plants.filter(greenhouse_id=greenhouse_id)
     
     layout = {}
     for row in range(1, max_rows + 1):
@@ -1589,8 +1638,12 @@ def plants_api(request):
     if request.method == 'GET':
         active_only = request.GET.get('active_only', 'true').lower() == 'true'
         search_query = request.GET.get('search', '')
+        active_greenhouse = GreenhouseConfig.get_config()
+        greenhouse_id = active_greenhouse.greenhouse_id if active_greenhouse else None
         
         queryset = Plant.objects.all()
+        if greenhouse_id:
+            queryset = queryset.filter(greenhouse_id=greenhouse_id)
         
         if active_only:
             queryset = queryset.filter(active=True)
@@ -1621,6 +1674,14 @@ def plants_api(request):
     
     elif request.method == 'POST':
         try:
+            active_greenhouse = GreenhouseConfig.get_config()
+            greenhouse_id = active_greenhouse.greenhouse_id if active_greenhouse else None
+            season_obj = None
+            if greenhouse_id:
+                season_obj = Season.objects.filter(greenhouse_id=greenhouse_id, is_active=True).order_by('id').first()
+                if season_obj is None:
+                    season_obj = Season.objects.filter(greenhouse_id=greenhouse_id).order_by('id').first()
+
             # Parse JSON data
             data = json.loads(request.body)
             
@@ -1634,6 +1695,7 @@ def plants_api(request):
             existing_plant = Plant.objects.filter(
                 location_row=int(data['location_row']),
                 location_column=int(data['location_column']),
+                greenhouse_id=greenhouse_id,
                 active=True
             ).first()
             
@@ -1661,6 +1723,8 @@ def plants_api(request):
                 name=data['name'],
                 variety=data.get('variety', ''),
                 planting_date=planting_date,
+                greenhouse_id=greenhouse_id,
+                season=season_obj,
                 watering_frequency=int(data['watering_frequency']),
                 watering_duration=int(data['watering_duration']),
                 water_amount_ml=int(data.get('water_amount_ml', 500)),
@@ -1723,6 +1787,9 @@ def paths_api(request):
     
     elif request.method == 'POST':
         try:
+            active_greenhouse = GreenhouseConfig.get_config()
+            greenhouse_id = active_greenhouse.greenhouse_id if active_greenhouse else None
+
             # Parse JSON data
             data = json.loads(request.body)
             
@@ -1739,6 +1806,7 @@ def paths_api(request):
             existing_plant = Plant.objects.filter(
                 location_row=row,
                 location_column=column,
+                greenhouse_id=greenhouse_id,
                 active=True
             ).first()
             
@@ -1825,11 +1893,19 @@ def paths_api(request):
 
 @ensure_csrf_cookie
 def setup_view(request):
-    """List all greenhouse configurations with their paired devices."""
+    """List all greenhouse configurations with their paired devices and seasons."""
     greenhouses = GreenhouseConfig.objects.prefetch_related('devices').all().order_by('name')
     active = GreenhouseConfig.get_config()
+    
+    # Build seasons dict by greenhouse_id for template access
+    seasons_by_gh = {}
+    for gh in greenhouses:
+        gh_id = gh.greenhouse_id or gh.name
+        seasons_by_gh[gh.pk] = Season.objects.filter(greenhouse_id=gh_id).order_by('-is_active', 'name')
+    
     return render(request, 'smart_greenhouse/setup.html', {
         'greenhouses': greenhouses,
+        'seasons_by_gh': seasons_by_gh,
         'active': active,
         'is_first_setup': not greenhouses.exists(),
         'device_type_choices': DeviceType.objects.all(),
@@ -1925,11 +2001,15 @@ def setup_controller_view(request):
 
 @require_http_methods(['POST'])
 def setup_select_greenhouse_view(request, greenhouse_id):
-    """Set a greenhouse as the active one."""
+    """Set a greenhouse as the active one and redirect back to referrer or dashboard."""
     config = get_object_or_404(GreenhouseConfig, pk=greenhouse_id)
     config.set_active()
-    messages.success(request, f'"{config.name}" iestatīta kā aktīvā siltumnīca.')
-    return redirect('smart_greenhouse:setup')
+    
+    # Redirect back to referrer (the page the user was on) or dashboard
+    referrer = request.META.get('HTTP_REFERER')
+    if referrer and '/setup/' not in referrer:
+        return redirect(referrer)
+    return redirect('smart_greenhouse:dashboard')
 
 
 @require_http_methods(['POST'])
@@ -1986,6 +2066,68 @@ def setup_remove_device_view(request, device_id):
     greenhouse_name = device.greenhouse.name
     device.delete()
     messages.success(request, f'Ierīce "{name}" noņemta no siltumnīcas "{greenhouse_name}".')
+    return redirect('smart_greenhouse:setup')
+
+
+@require_http_methods(['POST'])
+def setup_add_season_view(request, greenhouse_id):
+    """Create a new season for a greenhouse."""
+    greenhouse = get_object_or_404(GreenhouseConfig, pk=greenhouse_id)
+    name = request.POST.get('name', '').strip()
+    start_date = request.POST.get('start_date', '').strip()
+    end_date = request.POST.get('end_date', '').strip()
+
+    if not name:
+        messages.error(request, 'Sezonas nosaukums ir obligāts.')
+        return redirect('smart_greenhouse:setup')
+
+    try:
+        season = Season.objects.create(
+            greenhouse_id=greenhouse.greenhouse_id or greenhouse.name,
+            name=name,
+            start_date=start_date if start_date else None,
+            end_date=end_date if end_date else None,
+            is_active=True,
+        )
+        messages.success(request, f'Sezona "{name}" pievienota siltumnīcai "{greenhouse.name}".')
+    except Exception as exc:
+        messages.error(request, f'Kļūda pievienojot sezonu: {exc}')
+    return redirect('smart_greenhouse:setup')
+
+
+@require_http_methods(['POST'])
+def setup_update_season_view(request, season_id):
+    """Update an existing season."""
+    season = get_object_or_404(Season, pk=season_id)
+    name = request.POST.get('name', '').strip()
+    start_date = request.POST.get('start_date', '').strip()
+    end_date = request.POST.get('end_date', '').strip()
+    is_active = request.POST.get('is_active') == 'on'
+
+    if not name:
+        messages.error(request, 'Sezonas nosaukums ir obligāts.')
+        return redirect('smart_greenhouse:setup')
+
+    try:
+        season.name = name
+        season.start_date = start_date if start_date else None
+        season.end_date = end_date if end_date else None
+        season.is_active = is_active
+        season.save()
+        messages.success(request, f'Sezona "{name}" atjaunināta.')
+    except Exception as exc:
+        messages.error(request, f'Kļūda atjaunojot sezonu: {exc}')
+    return redirect('smart_greenhouse:setup')
+
+
+@require_http_methods(['POST'])
+def setup_delete_season_view(request, season_id):
+    """Delete a season."""
+    season = get_object_or_404(Season, pk=season_id)
+    greenhouse_name = season.greenhouse_id
+    name = season.name
+    season.delete()
+    messages.success(request, f'Sezona "{name}" dzēsta no siltumnīcas "{greenhouse_name}".')
     return redirect('smart_greenhouse:setup')
 
 

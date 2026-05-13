@@ -148,6 +148,26 @@ class WateringCycle(models.Model):
         return None
 
 
+class Season(models.Model):
+    """Season configuration per greenhouse."""
+
+    greenhouse_id = models.CharField(max_length=255, db_index=True, help_text="Linked greenhouse ID")
+    name = models.CharField(max_length=120, help_text="Season name")
+    start_date = models.DateField(blank=True, null=True)
+    end_date = models.DateField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'seasons'
+        ordering = ['greenhouse_id', '-is_active', 'name']
+        unique_together = [('greenhouse_id', 'name')]
+
+    def __str__(self):
+        return f"{self.name} ({self.greenhouse_id})"
+
+
 class Plant(models.Model):
     """Model for plant registration and management in greenhouse"""
     
@@ -160,6 +180,8 @@ class Plant(models.Model):
     water_amount_ml = models.PositiveIntegerField(blank=True, null=True, help_text="Ūdens daudzums ml")  # FR-13
     harvest_date_estimate = models.DateField(blank=True, null=True, help_text="Ražas prognozes datums")  # FR-14
     harvest_quantity_estimate = models.FloatField(blank=True, null=True, help_text="Prognozētais ražas daudzums (kg)")  # FR-14
+    greenhouse_id = models.CharField(max_length=255, db_index=True, blank=True, null=True, help_text="Saistītās siltumnīcas ID")
+    season = models.ForeignKey('Season', on_delete=models.SET_NULL, null=True, blank=True, related_name='plants', db_column='season_id')
     location_row = models.PositiveIntegerField(help_text="Rindas numurs siltumnīcā")  # FR-15
     location_column = models.PositiveIntegerField(help_text="Kolonnas numurs siltumnīcā")  # FR-15
     location_description = models.CharField(max_length=200, blank=True, null=True, help_text="Papildu atrašanās vietas apraksts")  # FR-15

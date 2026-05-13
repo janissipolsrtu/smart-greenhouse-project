@@ -60,4 +60,7 @@ urlpatterns = [
     path('setup/<int:greenhouse_id>/delete/', views.setup_delete_greenhouse_view, name='setup_delete'),
     path('setup/<int:greenhouse_id>/add-device/', views.setup_add_device_view, name='setup_add_device'),
     path('setup/device/<int:device_id>/remove/', views.setup_remove_device_view, name='setup_remove_device'),
+    path('setup/<int:greenhouse_id>/add-season/', views.setup_add_season_view, name='setup_add_season'),
+    path('setup/season/<int:season_id>/update/', views.setup_update_season_view, name='setup_update_season'),
+    path('setup/season/<int:season_id>/delete/', views.setup_delete_season_view, name='setup_delete_season'),
 ]
