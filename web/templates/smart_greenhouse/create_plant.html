@@ -10,52 +10,74 @@
     <div class="card-body">
         <div class="row g-3">
             <div class="col-md-6">
+                <label class="form-label">Siltumnīca</label>
+                <select class="form-select" id="greenhouseSelect" name="greenhouse_id">
+                    <option value="">Aktīvā siltumnīca (automātiski)</option>
+                    {% for greenhouse in all_greenhouses %}
+                        <option value="{{ greenhouse.greenhouse_id }}" {% if selected_greenhouse_id == greenhouse.greenhouse_id %}selected{% endif %}>
+                            {{ greenhouse.name }}{% if greenhouse.location %} ({{ greenhouse.location }}){% endif %}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Sezona</label>
+                <select class="form-select" id="seasonSelect" name="season_id">
+                    <option value="">Automātiski pēc siltumnīcas</option>
+                    {% for season in available_seasons %}
+                        <option value="{{ season.id }}" {% if selected_season_id == season.id|stringformat:"s" %}selected{% endif %}>
+                            {{ season.name }}{% if season.is_active %} (aktīva){% endif %}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
                 <label class="form-label">Nosaukums *</label>
-                <input class="form-control" type="text" name="name" required>
+                <input class="form-control" type="text" name="name" value="{{ form_data.name|default:'' }}" required>
             </div>
             <div class="col-md-6">
                 <label class="form-label">Šķirne</label>
-                <input class="form-control" type="text" name="variety">
+                <input class="form-control" type="text" name="variety" value="{{ form_data.variety|default:'' }}">
             </div>
             <div class="col-md-4">
                 <label class="form-label">Stādīšanas datums *</label>
-                <input class="form-control" type="date" name="planting_date" required>
+                <input class="form-control" type="date" name="planting_date" value="{{ form_data.planting_date|default:'' }}" required>
             </div>
             <div class="col-md-4">
                 <label class="form-label">Rinda *</label>
-                <input class="form-control" type="number" name="location_row" min="1" required>
+                <input class="form-control" type="number" name="location_row" min="1" value="{{ form_data.location_row|default:'' }}" required>
             </div>
             <div class="col-md-4">
                 <label class="form-label">Kolonna *</label>
-                <input class="form-control" type="number" name="location_column" min="1" required>
+                <input class="form-control" type="number" name="location_column" min="1" value="{{ form_data.location_column|default:'' }}" required>
             </div>
             <div class="col-md-4">
                 <label class="form-label">Laistīšanas biežums</label>
-                <input class="form-control" type="number" name="watering_frequency" value="1" min="1">
+                <input class="form-control" type="number" name="watering_frequency" value="{{ form_data.watering_frequency|default:'1' }}" min="1">
             </div>
             <div class="col-md-4">
                 <label class="form-label">Laistīšanas ilgums (sek)</label>
-                <input class="form-control" type="number" name="watering_duration" value="300" min="1">
+                <input class="form-control" type="number" name="watering_duration" value="{{ form_data.watering_duration|default:'300' }}" min="1">
             </div>
             <div class="col-md-4">
                 <label class="form-label">Ūdens daudzums (ml)</label>
-                <input class="form-control" type="number" name="water_amount_ml" min="1">
+                <input class="form-control" type="number" name="water_amount_ml" min="1" value="{{ form_data.water_amount_ml|default:'' }}">
             </div>
             <div class="col-md-6">
                 <label class="form-label">Ražas datuma prognoze</label>
-                <input class="form-control" type="date" name="harvest_date_estimate">
+                <input class="form-control" type="date" name="harvest_date_estimate" value="{{ form_data.harvest_date_estimate|default:'' }}">
             </div>
             <div class="col-md-6">
                 <label class="form-label">Ražas daudzuma prognoze (kg)</label>
-                <input class="form-control" type="number" step="0.01" name="harvest_quantity_estimate" min="0">
+                <input class="form-control" type="number" step="0.01" name="harvest_quantity_estimate" min="0" value="{{ form_data.harvest_quantity_estimate|default:'' }}">
             </div>
             <div class="col-12">
                 <label class="form-label">Atrašanās apraksts</label>
-                <input class="form-control" type="text" name="location_description">
+                <input class="form-control" type="text" name="location_description" value="{{ form_data.location_description|default:'' }}">
             </div>
             <div class="col-12">
                 <label class="form-label">Piezīmes</label>
-                <textarea class="form-control" name="notes" rows="3"></textarea>
+                <textarea class="form-control" name="notes" rows="3">{{ form_data.notes|default:'' }}</textarea>
             </div>
         </div>
     </div>
@@ -64,4 +86,44 @@
         <a class="btn btn-outline-secondary" href="{% url 'smart_greenhouse:plant_list' %}">Atcelt</a>
     </div>
 </form>
+
+<script>
+    (function () {
+        const seasonsByGreenhouse = {{ seasons_by_greenhouse_json|safe }};
+        const greenhouseSelect = document.getElementById('greenhouseSelect');
+        const seasonSelect = document.getElementById('seasonSelect');
+
+        if (!greenhouseSelect || !seasonSelect) {
+            return;
+        }
+
+        function renderSeasonOptions(greenhouseId) {
+            const previousValue = seasonSelect.value;
+            const seasons = greenhouseId ? (seasonsByGreenhouse[greenhouseId] || []) : [];
+
+            seasonSelect.innerHTML = '';
+            const autoOption = document.createElement('option');
+            autoOption.value = '';
+            autoOption.textContent = 'Automātiski pēc siltumnīcas';
+            seasonSelect.appendChild(autoOption);
+
+            seasons.forEach((season) => {
+                const option = document.createElement('option');
+                option.value = String(season.id);
+                option.textContent = season.name + (season.is_active ? ' (aktīva)' : '');
+                seasonSelect.appendChild(option);
+            });
+
+            if ([...seasonSelect.options].some((opt) => opt.value === previousValue)) {
+                seasonSelect.value = previousValue;
+            } else {
+                seasonSelect.value = '';
+            }
+        }
+
+        greenhouseSelect.addEventListener('change', function () {
+            renderSeasonOptions(greenhouseSelect.value);
+        });
+    })();
+</script>
 {% endblock %}

@@ -765,8 +765,8 @@ def temperature_dashboard_view(request):
                 'sensor_max_temperature': device_stats.get('sensor_max_temperature'),
                 'sensor_min_temperature': device_stats.get('sensor_min_temperature'),
             })
-    else:
-        # Fallback for setups without registered greenhouse devices.
+    elif not active_greenhouse:
+        # Fallback for setups without a selected greenhouse - show all registered sensors
         orm_device_names = set(sensor_query.values_list('device_name', flat=True).distinct())
         with connection.cursor() as cursor:
             cursor.execute("SELECT DISTINCT device_name FROM sensor_data")
@@ -897,6 +897,7 @@ def temperature_dashboard_view(request):
         'current_time': now,
         'device_count': len(latest_readings),
         'active_greenhouse': active_greenhouse,
+        'all_greenhouses': GreenhouseConfig.objects.all().order_by('name'),
     }
     
     return render(request, 'smart_greenhouse/temperature_dashboard.html', context)
@@ -1339,15 +1340,73 @@ def create_plant_view(request):
     if not _feature_enabled('feature_plants', default=True):
         return _redirect_feature_disabled(request, 'Augi')
 
+    all_greenhouses = list(GreenhouseConfig.objects.all().order_by('name'))
+
+    def build_context(form_data=None):
+        active_greenhouse = GreenhouseConfig.get_config()
+        active_greenhouse_id = active_greenhouse.greenhouse_id if active_greenhouse else None
+
+        selected_greenhouse_id = ''
+        if form_data and form_data.get('greenhouse_id'):
+            selected_greenhouse_id = form_data.get('greenhouse_id').strip()
+        elif active_greenhouse_id:
+            selected_greenhouse_id = active_greenhouse_id
+
+        seasons_qs = Season.objects.none()
+        if selected_greenhouse_id:
+            seasons_qs = Season.objects.filter(greenhouse_id=selected_greenhouse_id).order_by('-is_active', 'name')
+
+        selected_season_id = ''
+        if form_data and form_data.get('season_id'):
+            selected_season_id = form_data.get('season_id').strip()
+        else:
+            default_season = seasons_qs.filter(is_active=True).first() or seasons_qs.first()
+            if default_season:
+                selected_season_id = str(default_season.id)
+
+        seasons_by_greenhouse = {}
+        for greenhouse in all_greenhouses:
+            greenhouse_seasons = Season.objects.filter(greenhouse_id=greenhouse.greenhouse_id).order_by('-is_active', 'name')
+            seasons_by_greenhouse[greenhouse.greenhouse_id] = [
+                {
+                    'id': season.id,
+                    'name': season.name,
+                    'is_active': season.is_active,
+                }
+                for season in greenhouse_seasons
+            ]
+
+        return {
+            'all_greenhouses': all_greenhouses,
+            'available_seasons': seasons_qs,
+            'selected_greenhouse_id': selected_greenhouse_id,
+            'selected_season_id': selected_season_id,
+            'seasons_by_greenhouse_json': json.dumps(seasons_by_greenhouse),
+            'form_data': form_data or {},
+        }
+
     if request.method == 'POST':
         try:
             active_greenhouse = GreenhouseConfig.get_config()
-            greenhouse_id = active_greenhouse.greenhouse_id if active_greenhouse else None
+
+            selected_greenhouse_id = (request.POST.get('greenhouse_id') or '').strip()
+            greenhouse_id = selected_greenhouse_id or (active_greenhouse.greenhouse_id if active_greenhouse else None)
+
+            if greenhouse_id and not GreenhouseConfig.objects.filter(greenhouse_id=greenhouse_id).exists():
+                messages.error(request, 'Izvēlēta nederīga siltumnīca.')
+                return render(request, 'smart_greenhouse/create_plant.html', build_context(request.POST))
+
+            selected_season_id = (request.POST.get('season_id') or '').strip()
             season_obj = None
             if greenhouse_id:
-                season_obj = Season.objects.filter(greenhouse_id=greenhouse_id, is_active=True).order_by('id').first()
-                if season_obj is None:
-                    season_obj = Season.objects.filter(greenhouse_id=greenhouse_id).order_by('id').first()
+                seasons_for_greenhouse = Season.objects.filter(greenhouse_id=greenhouse_id).order_by('-is_active', 'name')
+                if selected_season_id:
+                    season_obj = seasons_for_greenhouse.filter(id=selected_season_id).first()
+                    if season_obj is None:
+                        messages.error(request, 'Izvēlēta nederīga sezona šai siltumnīcai.')
+                        return render(request, 'smart_greenhouse/create_plant.html', build_context(request.POST))
+                else:
+                    season_obj = seasons_for_greenhouse.filter(is_active=True).first() or seasons_for_greenhouse.first()
 
             # Extract form data
             name = request.POST.get('name').strip()
@@ -1385,7 +1444,7 @@ def create_plant_view(request):
             
             if existing_plant:
                 messages.error(request, f'Atrašanās vieta R{location_row}C{location_column} jau ir aizņemta ar augu: {existing_plant.name}')
-                return render(request, 'smart_greenhouse/create_plant.html')
+                return render(request, 'smart_greenhouse/create_plant.html', build_context(request.POST))
             
             # Create the plant
             plant = Plant.objects.create(
@@ -1412,8 +1471,9 @@ def create_plant_view(request):
             messages.error(request, f'Nepareizi dati: {str(e)}')
         except Exception as e:
             messages.error(request, f'Kļūda reģistrējot augu: {str(e)}')
-    
-    return render(request, 'smart_greenhouse/create_plant.html')
+        return render(request, 'smart_greenhouse/create_plant.html', build_context(request.POST))
+
+    return render(request, 'smart_greenhouse/create_plant.html', build_context())
 
 
 def edit_plant_view(request, plant_id):
