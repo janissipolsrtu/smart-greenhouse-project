@@ -19,4 +19,4 @@ EXPOSE 8000
 
 # The source code will be mounted as a volume
 # Run the FastAPI application
-CMD ["python", "irrigation_api.py"]
+CMD ["python", "smart_greenhouse_api.py"]

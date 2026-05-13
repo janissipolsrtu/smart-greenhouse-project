@@ -1,0 +1,268 @@
+{% extends 'base.html' %}
+
+{% block title %}Jauns laistīšanas plāns{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <h1 class="h2 mb-0"><i class="fas fa-plus me-2"></i>Izveidot laistīšanas plānu</h1>
+        <p class="text-muted">Plāns var saturēt nulli vai daudz ciklus</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label class="form-label">Nosaukums</label>
+                <input type="text" name="name" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Apraksts</label>
+                <textarea name="description" class="form-control" rows="1"></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Siltumnīca</label>
+                <select name="greenhouse_config" class="form-select">
+                    <option value="">-- Izvēlēties siltumnīcu --</option>
+                    {% for gh in all_greenhouses %}
+                        <option value="{{ gh.pk }}" {% if gh.is_active %}selected{% endif %}>
+                            {{ gh.name }}{% if gh.location %} – {{ gh.location }}{% endif %}
+                            {% if gh.season %} ({{ gh.season }}){% endif %}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Sākuma datums</label>
+                    <input type="date" name="start_date" class="form-control">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Beigu datums</label>
+                    <input type="date" name="end_date" class="form-control">
+                </div>
+            </div>
+            <div class="form-check mb-3">
+                <input type="checkbox" class="form-check-input" id="active" name="active" checked>
+                <label class="form-check-label" for="active">Aktīvs plāns</label>
+            </div>
+
+            <hr>
+            <h6 class="mb-3"><i class="fas fa-tint me-1"></i>Automātiski pievienot laistīšanas reizes</h6>
+
+            <div class="form-check mb-3">
+                <input type="checkbox" class="form-check-input" id="auto_create_cycles" name="auto_create_cycles">
+                <label class="form-check-label" for="auto_create_cycles">Izveidot ciklus automātiski šim plānam</label>
+            </div>
+
+            <div id="cycle-generation-options" style="display: none; padding: 20px; border: 1px solid #ddd; border-radius: 0.375rem; background-color: #f8f9fa;">
+                <div class="row">
+                    <div class="col-6">
+                        <div class="mb-3">
+                            <label class="form-label">Atkārtošanās tips</label>
+                            <select class="form-select" id="schedule_type" name="schedule_type">
+                                <option value="daily">Katru dienu</option>
+                                <option value="interval">Ik pēc N dienām (1-7)</option>
+                                <option value="weekly">Katru nedēļu konkrētā dienā</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3" id="interval-wrap" style="display:none;">
+                            <label class="form-label">Intervāls dienās</label>
+                            <input type="number" class="form-control" name="interval_days" min="1" max="7" value="1">
+                        </div>
+
+                        <div class="mb-3" id="weekday-wrap" style="display:none;">
+                            <label class="form-label">Nedēļas diena</label>
+                            <select class="form-select" name="weekly_day">
+                                <option value="0">Pirmdiena</option>
+                                <option value="1">Otrdiena</option>
+                                <option value="2">Trešdiena</option>
+                                <option value="3">Ceturtdiena</option>
+                                <option value="4">Piektdiena</option>
+                                <option value="5">Sestdiena</option>
+                                <option value="6">Svētdiena</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Ierīce</label>
+                            <select class="form-select" name="device">
+                                <option value="0x540f57fffe890af8">🏠 Galvenā laistīšanas kontroliere</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="col-6">
+                        <div class="mb-3">
+                            <label class="form-label"><i class="fas fa-clock me-1"></i>Laistīšanas reizes</label>
+                            <small class="text-muted d-block mb-2">Pievienojiet vienu vai vairākus laistīšanas laikukus dienā</small>
+                            <div id="cycle-times-container">
+                                <div class="cycle-time-slot mb-2 p-2 border rounded bg-light">
+                                    <div class="row align-items-end">
+                                        <div class="col-md-5">
+                                            <label class="form-label small">Laiks</label>
+                                            <input type="time" class="form-control form-control-sm cycle-time-input" value="06:00">
+                                        </div>
+                                        <div class="col-md-5">
+                                            <label class="form-label small">Ilgums (sek.)</label>
+                                            <input type="number" class="form-control form-control-sm cycle-duration-input" min="1" max="3600" value="60">
+                                        </div>
+                                        <div class="col-md-2">
+                                            <button type="button" class="btn btn-sm btn-outline-danger remove-time-slot d-none">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="button" id="add-time-slot-btn" class="btn btn-sm btn-outline-primary mt-2">
+                                <i class="fas fa-plus me-1"></i>Pievienot laisīšanas reizi
+                            </button>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Ciklu apraksts (neobligāti)</label>
+                            <input type="text" name="cycle_description" class="form-control" placeholder="piem., Rīta laistīšana">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-info small mt-3 mb-0">
+                    Lai automātiski ģenerētu ciklus, norādi sākuma un beigu datumu augstāk.
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end gap-2">
+                <a href="{% url 'irrigation:plan_list' %}" class="btn btn-outline-secondary">Atcelt</a>
+                <button type="submit" class="btn btn-primary">Saglabāt plānu</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const autoCreate = document.getElementById('auto_create_cycles');
+  const optionsWrap = document.getElementById('cycle-generation-options');
+  const scheduleType = document.getElementById('schedule_type');
+  const intervalWrap = document.getElementById('interval-wrap');
+  const weekdayWrap = document.getElementById('weekday-wrap');
+  const cycleTimesContainer = document.getElementById('cycle-times-container');
+  const addTimeSlotBtn = document.getElementById('add-time-slot-btn');
+
+  function toggleOptions() {
+    optionsWrap.style.display = autoCreate.checked ? 'block' : 'none';
+  }
+
+  function toggleScheduleFields() {
+    const mode = scheduleType.value;
+    intervalWrap.style.display = mode === 'interval' ? 'block' : 'none';
+    weekdayWrap.style.display = mode === 'weekly' ? 'block' : 'none';
+  }
+
+  function createTimeSlot(time = '06:00', duration = '60') {
+    const slot = document.createElement('div');
+    slot.className = 'cycle-time-slot mb-2 p-2 border rounded bg-light';
+    slot.innerHTML = `
+      <div class="row align-items-end">
+        <div class="col-md-5">
+          <label class="form-label small">Laiks</label>
+          <input type="time" class="form-control form-control-sm cycle-time-input" value="${time}">
+        </div>
+        <div class="col-md-5">
+          <label class="form-label small">Ilgums (sek.)</label>
+          <input type="number" class="form-control form-control-sm cycle-duration-input" min="1" max="3600" value="${duration}">
+        </div>
+        <div class="col-md-2">
+          <button type="button" class="btn btn-sm btn-outline-danger remove-time-slot">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+      </div>
+    `;
+
+    const removeBtn = slot.querySelector('.remove-time-slot');
+    removeBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      slot.remove();
+      updateRemoveButtonVisibility();
+    });
+
+    return slot;
+  }
+
+  function updateRemoveButtonVisibility() {
+    const slots = cycleTimesContainer.querySelectorAll('.cycle-time-slot');
+    slots.forEach((slot, index) => {
+      const removeBtn = slot.querySelector('.remove-time-slot');
+      if (slots.length <= 1) {
+        removeBtn.classList.add('d-none');
+      } else {
+        removeBtn.classList.remove('d-none');
+      }
+    });
+  }
+
+  function addTimeSlot() {
+    const newSlot = createTimeSlot();
+    cycleTimesContainer.appendChild(newSlot);
+    updateRemoveButtonVisibility();
+  }
+
+  // Prepare form data for submission
+  const form = document.querySelector('form');
+  form.addEventListener('submit', function(e) {
+    // Only process if auto_create_cycles is checked
+    if (autoCreate.checked) {
+      // Get all time slots
+      const slots = cycleTimesContainer.querySelectorAll('.cycle-time-slot');
+      if (slots.length === 0) {
+        e.preventDefault();
+        alert('Pievienojiet vismaz vienu laisīšanas reizi');
+        return;
+      }
+
+      // Create hidden inputs for times and durations
+      // Clear any existing cycle time/duration inputs
+      let oldTimeInput = form.querySelector('input[name="cycle_time"]');
+      let oldDurationInput = form.querySelector('input[name="cycle_duration"]');
+      if (oldTimeInput) oldTimeInput.remove();
+      if (oldDurationInput) oldDurationInput.remove();
+
+      // Add hidden inputs for each time slot
+      slots.forEach((slot, index) => {
+        const timeInput = slot.querySelector('.cycle-time-input').value;
+        const durationInput = slot.querySelector('.cycle-duration-input').value;
+
+        const hiddenTime = document.createElement('input');
+        hiddenTime.type = 'hidden';
+        hiddenTime.name = `cycle_times`;
+        hiddenTime.value = timeInput;
+        form.appendChild(hiddenTime);
+
+        const hiddenDuration = document.createElement('input');
+        hiddenDuration.type = 'hidden';
+        hiddenDuration.name = `cycle_durations`;
+        hiddenDuration.value = durationInput;
+        form.appendChild(hiddenDuration);
+      });
+    }
+  });
+
+  autoCreate.addEventListener('change', toggleOptions);
+  scheduleType.addEventListener('change', toggleScheduleFields);
+  addTimeSlotBtn.addEventListener('click', function(e) {
+    e.preventDefault();
+    addTimeSlot();
+  });
+
+  // Initialize
+  toggleOptions();
+  toggleScheduleFields();
+  updateRemoveButtonVisibility();
+</script>
+{% endblock %}

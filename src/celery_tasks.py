@@ -15,7 +15,7 @@ from celery.exceptions import Retry, WorkerLostError
 
 # Database imports
 from database import init_database
-from irrigation_db_service import WateringCycleService
+from smart_greenhouse_db_service import WateringCycleService
 from models import WateringCycle
 from celery_config import celery_app
 
@@ -100,7 +100,7 @@ def execute_irrigation(self, cycle_id: str, device: str, duration: int, descript
             client.loop_start()
             
             # Send irrigation command
-            topic = f"irrigation/{device}/command"
+            topic = f"smart_greenhouse/{device}/command"
             payload = {
                 "action": "start_irrigation",
                 "duration": duration,

@@ -6,7 +6,7 @@ import os
 sys.path.append('/app')
 
 from celery_tasks import execute_irrigation
-from irrigation_db_service import WateringCycleService
+from smart_greenhouse_db_service import WateringCycleService
 from models import WateringCycle
 from datetime import datetime
 

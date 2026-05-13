@@ -134,7 +134,7 @@ def main():
     # Test API connection
     if not test_api_connection():
         print("❌ Cannot connect to API. Make sure the FastAPI server is running.")
-        print(f"   Start it with: python irrigation_api.py")
+        print(f"   Start it with: python smart_greenhouse_api.py")
         return
     
     # Show API documentation
