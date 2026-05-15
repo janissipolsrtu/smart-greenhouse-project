@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load tz %}
 
 {% block title %}Dzēst plānu - Gudrā siltumnīca{% endblock %}
 
@@ -29,11 +30,12 @@
                 <p>Vai tiešām vēlaties dzēst šo laistīšanas plānu?</p>
                 
                 <dl class="row">
+                    {% with cycle_tz=plan.greenhouse_config.timezone|default:"UTC" %}
                     <dt class="col-sm-4">Plāna ID:</dt>
                     <dd class="col-sm-8"><code>{{ plan.id }}</code></dd>
                     
                     <dt class="col-sm-4">Ieplānotais laiks:</dt>
-                    <dd class="col-sm-8">{{ plan.scheduled_time|date:"M d, Y H:i" }} UTC</dd>
+                    <dd class="col-sm-8">{{ plan.scheduled_time|timezone:cycle_tz|date:"M d, Y H:i" }} <span class="text-muted">{{ cycle_tz }}</span></dd>
                     
                     <dt class="col-sm-4">Ilgums:</dt>
                     <dd class="col-sm-8">{{ plan.duration_minutes|floatformat:1 }} minūtes</dd>
@@ -42,6 +44,7 @@
                     <dd class="col-sm-8">
                         <span class="badge bg-warning">{{ plan.get_status_display }}</span>
                     </dd>
+                    {% endwith %}
                 </dl>
                 
                 <form method="post" class="mt-4">

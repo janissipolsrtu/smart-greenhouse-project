@@ -1,14 +1,25 @@
 """Database service for watering cycle operations"""
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc, asc
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import List, Optional
 import logging
+import os
+from zoneinfo import ZoneInfo
 
 from models import WateringCycle, WateringPlan
 from database import SessionLocal
 
 logger = logging.getLogger(__name__)
+APP_TIMEZONE = os.getenv("APP_TIMEZONE", "Europe/Riga")
+
+
+def local_now_naive() -> datetime:
+    """Return current time as naive datetime in configured app timezone."""
+    try:
+        return datetime.now(ZoneInfo(APP_TIMEZONE)).replace(tzinfo=None)
+    except Exception:
+        return datetime.now()
 
 class WateringCycleService:
     """Service class for watering cycle database operations"""
@@ -106,7 +117,7 @@ class WateringCycleService:
             if executed_at:
                 cycle.executed_at = executed_at
             elif status in ['executing', 'completed', 'failed']:
-                cycle.executed_at = datetime.now(timezone.utc)
+                cycle.executed_at = local_now_naive()
                 
             db.commit()
             logger.info(f"Updated cycle {cycle_id} status to: {status}")

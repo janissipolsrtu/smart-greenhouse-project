@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load tz %}
 
 {% block title %}Pārskats - Gudrā siltumnīca{% endblock %}
 
@@ -167,9 +168,12 @@
                                         {% endif %}
                                     </td>
                                     <td>
+                                        {% with plan_tz=plan.display_timezone|default:"UTC" %}
                                         <span class="time-badge badge bg-primary">
-                                            {{ plan.scheduled_time|date:"M d, H:i" }}
+                                            {{ plan.scheduled_time|timezone:plan_tz|date:"M d, H:i" }}
                                         </span>
+                                        <br><small class="text-muted">{{ plan_tz }}</small>
+                                        {% endwith %}
                                     </td>
                                     <td>{{ plan.duration_minutes|floatformat:1 }}m</td>
                                     <td>

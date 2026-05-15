@@ -68,6 +68,8 @@
           <dd class="col-sm-8">{{ gh.location|default:"—" }}</dd>
           <dt class="col-sm-4 text-muted">Sezona</dt>
           <dd class="col-sm-8">{{ gh.season|default:"—" }}</dd>
+          <dt class="col-sm-4 text-muted">Laika zona</dt>
+          <dd class="col-sm-8"><code>{{ gh.timezone|default:"UTC" }}</code></dd>
           <dt class="col-sm-4 text-muted">Kontrolleris</dt>
           <dd class="col-sm-8">{% if gh.controller_ip %}<code>{{ gh.controller_ip }}</code>{% else %}—{% endif %}</dd>
           <dt class="col-sm-4 text-muted">Lietotājs</dt>
@@ -260,7 +262,7 @@
       </div>
       <div class="card-footer d-flex gap-2">
         <button class="btn btn-sm btn-outline-secondary"
-          onclick="openEditModal({{ gh.pk }}, '{{ gh.name|escapejs }}', '{{ gh.location|escapejs }}', '{{ gh.season|escapejs }}', {{ gh.feature_plants|yesno:'true,false' }}, {{ gh.feature_layout|yesno:'true,false' }}, {{ gh.feature_meteostation|yesno:'true,false' }}, {{ gh.feature_watering_liters|yesno:'true,false' }}, {{ gh.feature_smart_suggestions|yesno:'true,false' }})">
+          onclick="openEditModal({{ gh.pk }}, '{{ gh.name|escapejs }}', '{{ gh.location|escapejs }}', '{{ gh.season|escapejs }}', '{{ gh.timezone|default:'UTC'|escapejs }}', {{ gh.feature_plants|yesno:'true,false' }}, {{ gh.feature_layout|yesno:'true,false' }}, {{ gh.feature_meteostation|yesno:'true,false' }}, {{ gh.feature_watering_liters|yesno:'true,false' }}, {{ gh.feature_smart_suggestions|yesno:'true,false' }})">
           <i class="fas fa-edit me-1"></i>Rediģēt
         </button>
         <button class="btn btn-sm btn-outline-secondary"
@@ -306,6 +308,15 @@
           <div class="mb-3">
             <label class="form-label">Sezona</label>
             <input type="text" name="season" class="form-control" placeholder="piem., Pavasaris 2026">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Laika zona</label>
+            <select name="timezone" class="form-select">
+              {% for tz in timezone_choices %}
+              <option value="{{ tz }}" {% if tz == "UTC" %}selected{% endif %}>{{ tz }}</option>
+              {% endfor %}
+            </select>
+            <div class="form-text">Izvēlieties IANA laika zonu, piemēram: <code>Europe/Riga</code>.</div>
           </div>
           <div class="mb-2">
             <label class="form-label">Funkciju iestatījumi</label>
@@ -363,6 +374,15 @@
           <div class="mb-3">
             <label class="form-label">Sezona</label>
             <input type="text" name="season" id="edit-gh-season" class="form-control" placeholder="piem., Pavasaris 2026">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Laika zona</label>
+            <select name="timezone" id="edit-gh-timezone" class="form-select">
+              {% for tz in timezone_choices %}
+              <option value="{{ tz }}">{{ tz }}</option>
+              {% endfor %}
+            </select>
+            <div class="form-text">Izvēlieties IANA laika zonu, piemēram: <code>Europe/Riga</code>.</div>
           </div>
           <div class="mb-2">
             <label class="form-label">Funkciju iestatījumi</label>
@@ -479,11 +499,12 @@
 {% block scripts %}
 <script>
 // ── Greenhouse edit / controller modals ────────────────────────────────────
-function openEditModal(id, name, location, season, featurePlants, featureLayout, featureMeteostation, featureWateringLiters, featureSmartSuggestions) {
+function openEditModal(id, name, location, season, timezoneName, featurePlants, featureLayout, featureMeteostation, featureWateringLiters, featureSmartSuggestions) {
   document.getElementById('edit-gh-id').value = id;
   document.getElementById('edit-gh-name').value = name;
   document.getElementById('edit-gh-location').value = location;
   document.getElementById('edit-gh-season').value = season;
+  document.getElementById('edit-gh-timezone').value = timezoneName || 'UTC';
   document.getElementById('edit-feature-plants').checked = Boolean(featurePlants);
   document.getElementById('edit-feature-layout').checked = Boolean(featureLayout);
   document.getElementById('edit-feature-meteostation').checked = Boolean(featureMeteostation);

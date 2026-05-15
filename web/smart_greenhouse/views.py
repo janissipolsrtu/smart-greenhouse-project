@@ -23,6 +23,55 @@ import time
 import json
 import threading
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
+
+
+COMMON_TIMEZONES = [
+    'UTC',
+    'Europe/Riga',
+    'Europe/Vilnius',
+    'Europe/Tallinn',
+    'Europe/Warsaw',
+    'Europe/Helsinki',
+    'Europe/Berlin',
+    'Europe/London',
+    'America/New_York',
+    'Asia/Tokyo',
+]
+
+try:
+    TIMEZONE_CHOICES = sorted(available_timezones())
+except Exception:
+    TIMEZONE_CHOICES = COMMON_TIMEZONES
+
+
+def _normalize_timezone(raw_timezone: str) -> str:
+    """Normalize and validate IANA timezone, falling back to UTC."""
+    candidate = (raw_timezone or '').strip() or 'UTC'
+    try:
+        ZoneInfo(candidate)
+        return candidate
+    except ZoneInfoNotFoundError:
+        return 'UTC'
+
+
+def _resolve_cycle_timezone(cycle, active_greenhouse=None) -> str:
+    """Resolve display timezone for a cycle safely without template chain lookups."""
+    tz_name = None
+
+    plan = getattr(cycle, 'plan', None)
+    if plan:
+        plan_greenhouse = getattr(plan, 'greenhouse_config', None)
+        tz_name = getattr(plan_greenhouse, 'timezone', None)
+
+    if not tz_name:
+        cycle_greenhouse = getattr(cycle, 'greenhouse_config', None)
+        tz_name = getattr(cycle_greenhouse, 'timezone', None)
+
+    if not tz_name and active_greenhouse:
+        tz_name = getattr(active_greenhouse, 'timezone', None)
+
+    return tz_name or 'UTC'
 
 
 class WateringCycleListView(ListView):
@@ -32,10 +81,15 @@ class WateringCycleListView(ListView):
     paginate_by = 10
     
     def get_queryset(self):
-        return WateringCycle.objects.all().order_by('-scheduled_time')
+        return WateringCycle.objects.select_related('greenhouse_config', 'plan', 'plan__greenhouse_config').all().order_by('-scheduled_time')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        active_greenhouse = GreenhouseConfig.get_config()
+        for cycle in context['plans']:
+            cycle.display_timezone = _resolve_cycle_timezone(cycle, active_greenhouse)
+
+        context['active_greenhouse'] = active_greenhouse
         context['all_greenhouses'] = GreenhouseConfig.objects.all().order_by('name')
         return context
 
@@ -161,11 +215,13 @@ def dashboard_view(request):
     feature_layout_enabled = active_greenhouse.feature_layout if active_greenhouse else False
     
     # Get upcoming cycles (next 24 hours)
-    upcoming_cycles = WateringCycle.objects.filter(
+    upcoming_cycles = list(WateringCycle.objects.filter(
         scheduled_time__gte=now,
         scheduled_time__lte=now + timezone.timedelta(days=1),
         status='pending'
-    ).order_by('scheduled_time')[:5]
+    ).order_by('scheduled_time')[:5])
+    for cycle in upcoming_cycles:
+        cycle.display_timezone = _resolve_cycle_timezone(cycle, active_greenhouse)
     
     # Get recent completed cycles
     recent_completed = WateringCycle.objects.filter(
@@ -368,9 +424,11 @@ def create_cycle_view(request):
 
     plans = WateringPlan.objects.filter(active=True).order_by('-created_at')
     selected_plan_id = request.GET.get('plan_id', '')
+    active_greenhouse = GreenhouseConfig.get_config()
     return render(request, 'smart_greenhouse/create_plan.html', {
         'plans': plans,
         'selected_plan_id': selected_plan_id,
+        'active_greenhouse': active_greenhouse,
     })
 
 
@@ -403,10 +461,16 @@ class WateringPlanListView(ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['upcoming_cycles'] = WateringCycle.objects.filter(
+        active_greenhouse = GreenhouseConfig.get_config()
+        upcoming_cycles = list(WateringCycle.objects.filter(
             scheduled_time__gte=timezone.now(),
             status='pending'
-        ).select_related('plan').order_by('scheduled_time')[:10]
+        ).select_related('plan', 'plan__greenhouse_config', 'greenhouse_config').order_by('scheduled_time')[:10])
+        for cycle in upcoming_cycles:
+            cycle.display_timezone = _resolve_cycle_timezone(cycle, active_greenhouse)
+
+        context['upcoming_cycles'] = upcoming_cycles
+        context['active_greenhouse'] = active_greenhouse
         return context
 
 
@@ -541,13 +605,20 @@ def create_plan_view(request):
 def plan_detail_view(request, plan_id):
     """View watering plan details and assigned cycles."""
     plan = get_object_or_404(WateringPlan, id=plan_id)
-    assigned_cycles = plan.cycles.all().order_by('-scheduled_time')
-    unassigned_cycles = WateringCycle.objects.filter(plan__isnull=True, status='pending').order_by('scheduled_time')[:50]
+    active_greenhouse = GreenhouseConfig.get_config()
+    assigned_cycles = list(plan.cycles.select_related('greenhouse_config').all().order_by('-scheduled_time'))
+    unassigned_cycles = list(WateringCycle.objects.filter(plan__isnull=True, status='pending').select_related('greenhouse_config').order_by('scheduled_time')[:50])
+
+    for cycle in assigned_cycles:
+        cycle.display_timezone = _resolve_cycle_timezone(cycle, active_greenhouse)
+    for cycle in unassigned_cycles:
+        cycle.display_timezone = _resolve_cycle_timezone(cycle, active_greenhouse)
 
     return render(request, 'smart_greenhouse/watering_plan_detail.html', {
         'plan': plan,
         'assigned_cycles': assigned_cycles,
         'unassigned_cycles': unassigned_cycles,
+        'active_greenhouse': active_greenhouse,
     })
 
 
@@ -1969,6 +2040,7 @@ def setup_view(request):
         'active': active,
         'is_first_setup': not greenhouses.exists(),
         'device_type_choices': DeviceType.objects.all(),
+        'timezone_choices': TIMEZONE_CHOICES,
     })
 
 
@@ -1979,6 +2051,7 @@ def setup_greenhouse_view(request):
         name = request.POST.get('name', '').strip()
         location = request.POST.get('location', '').strip()
         season = request.POST.get('season', '').strip()
+        timezone_name = request.POST.get('timezone', '').strip()
         feature_plants = request.POST.get('feature_plants') == 'on'
         feature_layout = request.POST.get('feature_layout') == 'on'
         feature_meteostation = request.POST.get('feature_meteostation') == 'on'
@@ -1996,6 +2069,7 @@ def setup_greenhouse_view(request):
 
         config.name = name
         config.season = season
+        config.timezone = _normalize_timezone(timezone_name)
         config.feature_plants = feature_plants
         config.feature_layout = feature_layout
         config.feature_meteostation = feature_meteostation

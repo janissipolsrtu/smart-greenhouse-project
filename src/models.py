@@ -74,6 +74,14 @@ class WateringCycle(Base):
         }
 
 
+class GreenhouseConfig(Base):
+    """Minimal mapping for greenhouse_config table to satisfy FK resolution."""
+    __tablename__ = "greenhouse_config"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(120), nullable=True)
+
+
 class Greenhouse(Base):
     """Database model for greenhouse metadata; MQTT auth lives in greenhouse_config."""
     __tablename__ = "greenhouses"

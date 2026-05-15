@@ -12,6 +12,7 @@ import os
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://redis:6379/0")
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://redis:6379/0")
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://irrigation_user:irrigation_pass@postgres:5432/irrigation_db")
+APP_TIMEZONE = os.getenv("APP_TIMEZONE", "Europe/Riga")
 
 # Create Celery app
 celery_app = Celery(
@@ -29,8 +30,8 @@ celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",
-    timezone="UTC",
-    enable_utc=True,
+    timezone=APP_TIMEZONE,
+    enable_utc=False,
     
     # Task routing and execution
     task_routes={

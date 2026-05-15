@@ -1,5 +1,5 @@
 from django.db import models
-from django.utils import timezone
+from django.utils import timezone as dj_timezone
 import json
 
 
@@ -23,7 +23,7 @@ class SensorData(models.Model):
     max_temperature = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     temperature_unit = models.CharField(max_length=20, default='celsius')
     raw_data = models.JSONField(null=True, blank=True, help_text="Raw JSON data from sensor")
-    timestamp = models.DateTimeField(default=timezone.now, help_text="When the sensor reading was taken")
+    timestamp = models.DateTimeField(default=dj_timezone.now, help_text="When the sensor reading was taken")
     created_at = models.DateTimeField(auto_now_add=True, help_text="When the record was created")
     
     class Meta:
@@ -66,7 +66,7 @@ class WateringPlan(models.Model):
     start_date = models.DateField(blank=True, null=True)
     end_date = models.DateField(blank=True, null=True)
     active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(default=timezone.now)
+    created_at = models.DateTimeField(default=dj_timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -119,7 +119,7 @@ class WateringCycle(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     executed_at = models.DateTimeField(null=True, blank=True)
     result = models.TextField(null=True, blank=True)
-    created_at = models.DateTimeField(default=timezone.now)
+    created_at = models.DateTimeField(default=dj_timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
@@ -137,13 +137,13 @@ class WateringCycle(models.Model):
     @property
     def is_overdue(self):
         """Check if the cycle is overdue"""
-        return timezone.now() > self.scheduled_time and self.status == 'pending'
+        return dj_timezone.now() > self.scheduled_time and self.status == 'pending'
     
     @property
     def time_until_execution(self):
         """Calculate time until execution"""
-        if self.scheduled_time > timezone.now():
-            delta = self.scheduled_time - timezone.now()
+        if self.scheduled_time > dj_timezone.now():
+            delta = self.scheduled_time - dj_timezone.now()
             return delta
         return None
 
@@ -156,7 +156,7 @@ class Season(models.Model):
     start_date = models.DateField(blank=True, null=True)
     end_date = models.DateField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(default=timezone.now)
+    created_at = models.DateTimeField(default=dj_timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -187,7 +187,7 @@ class Plant(models.Model):
     location_description = models.CharField(max_length=200, blank=True, null=True, help_text="Papildu atrašanās vietas apraksts")  # FR-15
     notes = models.TextField(blank=True, null=True, help_text="Papildu piezīmes par augu")
     active = models.BooleanField(default=True, help_text="Vai augs vēl ir aktīvs")
-    created_at = models.DateTimeField(default=timezone.now, help_text="Reģistrācijas datums")
+    created_at = models.DateTimeField(default=dj_timezone.now, help_text="Reģistrācijas datums")
     updated_at = models.DateTimeField(auto_now=True, help_text="Pēdējās izmaiņas")
     
     class Meta:
@@ -211,21 +211,21 @@ class Plant(models.Model):
     def days_since_planting(self):
         """Calculate days since planting"""
         if self.planting_date:
-            return (timezone.now().date() - self.planting_date).days
+            return (dj_timezone.now().date() - self.planting_date).days
         return 0
     
     @property
     def days_to_harvest(self):
         """Calculate days until harvest"""
         if self.harvest_date_estimate:
-            return (self.harvest_date_estimate - timezone.now().date()).days
+            return (self.harvest_date_estimate - dj_timezone.now().date()).days
         return None
     
     @property
     def is_ready_for_harvest(self):
         """Check if plant is ready for harvest"""
         if self.harvest_date_estimate:
-            return timezone.now().date() >= self.harvest_date_estimate
+            return dj_timezone.now().date() >= self.harvest_date_estimate
         return False
     
     @property
@@ -255,13 +255,14 @@ class GreenhouseConfig(models.Model):
     controller_ip = models.GenericIPAddressField(null=True, blank=True, help_text="Kontrollera IP adrese")
     controller_username = models.CharField(max_length=100, blank=True, help_text="Kontrollera lietotājvārds")
     controller_password = models.CharField(max_length=255, blank=True, help_text="Kontrollera parole (glabāta šifrēta)")
+    timezone = models.CharField(max_length=64, default='UTC', help_text="Laika zona (piem., Europe/Riga)")
     feature_plants = models.BooleanField(default=True, help_text="Iespējot augu pārvaldības moduli")
     feature_layout = models.BooleanField(default=True, help_text="Iespējot siltumnīcas izkārtojuma moduli")
     feature_meteostation = models.BooleanField(default=False, help_text="Iespējot meteostacijas datu moduli")
     feature_watering_liters = models.BooleanField(default=False, help_text="Iespējot laistīšanu litros")
     feature_smart_suggestions = models.BooleanField(default=False, help_text="Iespējot gudros ieteikumus")
     selected = models.BooleanField(default=False, help_text="Izvēlētā siltumnīca")
-    created_at = models.DateTimeField(default=timezone.now)
+    created_at = models.DateTimeField(default=dj_timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -322,7 +323,7 @@ class DeviceType(models.Model):
 
     type_key = models.CharField(max_length=40, unique=True, help_text="Machine-readable key, e.g. 'irrigation_controller'")
     name = models.CharField(max_length=120, help_text="Human-readable name")
-    created_at = models.DateTimeField(default=timezone.now)
+    created_at = models.DateTimeField(default=dj_timezone.now)
 
     class Meta:
         db_table = 'device_types'
@@ -357,7 +358,7 @@ class Device(models.Model):
     )
     active = models.BooleanField(default=True)
     notes = models.TextField(blank=True)
-    created_at = models.DateTimeField(default=timezone.now)
+    created_at = models.DateTimeField(default=dj_timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -379,7 +380,7 @@ class PathCell(models.Model):
     row = models.PositiveIntegerField(help_text="Rindas numurs siltumnīcā")
     column = models.PositiveIntegerField(help_text="Kolonnas numurs siltumnīcā") 
     description = models.CharField(max_length=200, blank=True, null=True, help_text="Ceļa apraksts")
-    created_at = models.DateTimeField(default=timezone.now)
+    created_at = models.DateTimeField(default=dj_timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:

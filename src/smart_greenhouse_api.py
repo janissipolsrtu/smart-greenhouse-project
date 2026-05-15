@@ -20,9 +20,10 @@ import uvicorn
 from typing import Optional, Dict, Any, List
 import uuid
 from enum import Enum
+from sqlalchemy import text
 
 # Database imports
-from database import init_database, test_database_connection
+from database import init_database, test_database_connection, SessionLocal
 from smart_greenhouse_db_service import WateringCycleService, WateringPlanService
 from plant_db_service import PlantService
 from greenhouse_db_service import GreenhouseService
@@ -196,6 +197,8 @@ app.add_middleware(
 MQTT_BROKER = os.getenv("MQTT_BROKER", "mosquitto")  # Use Docker service name, fallback to mosquitto
 MQTT_PORT = 1883
 MQTT_KEEPALIVE = 60
+MQTT_USERNAME = os.getenv("MQTT_USERNAME", "")
+MQTT_PASSWORD = os.getenv("MQTT_PASSWORD", "")
 
 # Device configuration
 DEVICES = {
@@ -231,6 +234,66 @@ class MQTTClient:
         self.client.on_message = self.on_message
         self.client.on_disconnect = self.on_disconnect
         self.connected = False
+        self.current_broker = MQTT_BROKER
+        self.current_port = MQTT_PORT
+        self.current_username = MQTT_USERNAME
+
+    def resolve_mqtt_settings(self) -> Dict[str, Any]:
+        """Resolve MQTT settings from greenhouse_config with env var fallback."""
+        default_settings = {
+            "broker": MQTT_BROKER,
+            "port": MQTT_PORT,
+            "username": MQTT_USERNAME,
+            "password": MQTT_PASSWORD,
+        }
+
+        db = SessionLocal()
+        try:
+            row = db.execute(
+                text(
+                    """
+                    SELECT
+                        COALESCE(controller_ip::text, '') AS mqtt_broker,
+                        COALESCE(controller_username, '') AS mqtt_username,
+                        COALESCE(controller_password, '') AS mqtt_password
+                    FROM greenhouse_config
+                    ORDER BY selected DESC, id DESC
+                    LIMIT 1
+                    """
+                )
+            ).mappings().first()
+
+            if not row:
+                return default_settings
+
+            broker_raw = (row.get("mqtt_broker") or "").strip()
+            broker = (broker_raw.split("/", 1)[0] if broker_raw else "") or default_settings["broker"]
+            username = (row.get("mqtt_username") or "").strip() or default_settings["username"]
+            password = row.get("mqtt_password") or default_settings["password"]
+
+            password_looks_hashed = (
+                isinstance(password, str)
+                and ':' in password
+                and len(password.split(':', 1)[0]) >= 16
+                and len(password.split(':', 1)[1]) >= 32
+            )
+            if password_looks_hashed:
+                logger.warning(
+                    "greenhouse_config password appears hashed; falling back to env/default MQTT password"
+                )
+                password = default_settings["password"]
+
+            return {
+                "broker": broker,
+                "port": MQTT_PORT,
+                "username": username,
+                "password": password,
+            }
+        except Exception as e:
+            logger.warning(f"Falling back to default MQTT settings: {e}")
+            return default_settings
+        finally:
+            db.close()
         
     def on_connect(self, client, userdata, flags, rc):
         if rc == 0:
@@ -292,14 +355,23 @@ class MQTTClient:
         
     def connect(self):
         try:
-            logger.info(f"Attempting to connect to MQTT broker at {MQTT_BROKER}:{MQTT_PORT}")
-            
-            # Set authentication if provided (none for simple setup)
-            # if MQTT_USERNAME and MQTT_PASSWORD:
-            #     self.client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
+            settings = self.resolve_mqtt_settings()
+            self.current_broker = settings["broker"]
+            self.current_port = settings["port"]
+            self.current_username = settings["username"]
+
+            logger.info(
+                "Attempting to connect to MQTT broker at %s:%s (auth_user=%s)",
+                self.current_broker,
+                self.current_port,
+                self.current_username or "<none>",
+            )
+
+            if settings["username"]:
+                self.client.username_pw_set(settings["username"], settings["password"] or None)
                 
             # Configure connection timeouts for better WSL networking
-            self.client.connect(MQTT_BROKER, MQTT_PORT, MQTT_KEEPALIVE)
+            self.client.connect(self.current_broker, self.current_port, MQTT_KEEPALIVE)
             self.client.loop_start()
             
             # Wait longer for connection and verify
@@ -631,7 +703,7 @@ async def system_status():
             "system": {
                 "status": "operational",
                 "mqtt_connected": mqtt_client.connected,
-                "mqtt_broker": MQTT_BROKER,
+                "mqtt_broker": mqtt_client.current_broker,
                 "api_version": "2.0.0",
                 "uptime": datetime.now().isoformat(),
                 "timing_mode": "server_side"
