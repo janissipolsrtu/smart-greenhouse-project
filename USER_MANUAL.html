@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+<html lang="lv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lietotāja rokasgrāmata – Gudrā Siltumnīca</title>
+  <style>
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.7;
+      color: #1e2a38;
+      background: #f4f6f9;
+    }
+
+    /* ── Cover page ── */
+    .cover {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      background: #fff;
+      color: #1e2a38;
+      padding: 40px 20px;
+    }
+    .cover .logo-icon {
+      font-size: 80px;
+      margin-bottom: 24px;
+      filter: drop-shadow(0 4px 12px rgba(0,0,0,0.4));
+    }
+    .cover h1 {
+      font-size: 2.8rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+    }
+    .cover h2 {
+      font-size: 1.4rem;
+      font-weight: 300;
+      opacity: 0.85;
+      margin-bottom: 40px;
+    }
+    .cover .meta {
+      opacity: 0.7;
+      font-size: 0.9rem;
+    }
+
+    /* ── Layout wrapper ── */
+    .wrapper {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+
+    /* ── Table of contents ── */
+    .toc {
+      background: #fff;
+      border-left: 5px solid #2e7d32;
+      border-radius: 8px;
+      padding: 32px 36px;
+      margin-bottom: 56px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+    }
+    .toc h2 {
+      font-size: 1.2rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #2e7d32;
+      margin-bottom: 20px;
+    }
+    .toc ol {
+      padding-left: 24px;
+    }
+    .toc li {
+      margin-bottom: 8px;
+    }
+    .toc a {
+      color: #1b5e20;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .toc a:hover { text-decoration: underline; }
+    .toc .sub {
+      margin-top: 4px;
+      margin-left: 16px;
+    }
+    .toc .sub li {
+      margin-bottom: 4px;
+      font-weight: 400;
+      color: #555;
+    }
+
+    /* ── Chapter sections ── */
+    .chapter {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 14px rgba(0,0,0,0.07);
+      margin-bottom: 56px;
+      overflow: hidden;
+    }
+    .chapter-header {
+      background: linear-gradient(135deg, #1b5e20, #388e3c);
+      color: #fff;
+      padding: 24px 36px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .chapter-header .chapter-number {
+      background: rgba(255,255,255,0.2);
+      border-radius: 50%;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .chapter-header h2 {
+      font-size: 1.5rem;
+      font-weight: 600;
+    }
+    .chapter-header p {
+      font-size: 0.9rem;
+      opacity: 0.85;
+      margin-top: 2px;
+    }
+    .chapter-body {
+      padding: 32px 36px;
+    }
+
+    /* ── Steps ── */
+    .step {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 36px;
+    }
+    .step-number {
+      background: #e8f5e9;
+      color: #1b5e20;
+      border-radius: 50%;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1rem;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .step-content h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #1e2a38;
+      margin-bottom: 6px;
+    }
+    .step-content p { margin-bottom: 10px; color: #3d4f60; }
+    .step-content p:last-child { margin-bottom: 0; }
+
+    /* ── Screenshot placeholder ── */
+    .screenshot-placeholder {
+      background: #f0f4f8;
+      border: 2px dashed #b0bec5;
+      border-radius: 8px;
+      padding: 40px 20px;
+      text-align: center;
+      color: #78909c;
+      margin: 18px 0;
+      position: relative;
+    }
+    .screenshot-placeholder .ph-icon { font-size: 2.5rem; display: block; margin-bottom: 10px; }
+    .screenshot-placeholder .ph-label {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #546e7a;
+      display: block;
+    }
+    .screenshot-placeholder .ph-hint {
+      font-size: 0.78rem;
+      color: #90a4ae;
+      display: block;
+      margin-top: 4px;
+    }
+
+    /* ── Callout boxes ── */
+    .callout {
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin: 16px 0;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .callout-icon { font-size: 1.2rem; flex-shrink: 0; margin-top: 1px; }
+    .callout p { margin: 0; font-size: 0.92rem; }
+    .callout-info    { background: #e3f2fd; border-left: 4px solid #1976d2; }
+    .callout-info .callout-icon { color: #1976d2; }
+    .callout-warning { background: #fff8e1; border-left: 4px solid #f9a825; }
+    .callout-warning .callout-icon { color: #f9a825; }
+    .callout-success { background: #e8f5e9; border-left: 4px solid #2e7d32; }
+    .callout-success .callout-icon { color: #2e7d32; }
+
+    /* ── Field tables ── */
+    .field-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0;
+      font-size: 0.92rem;
+    }
+    .field-table th {
+      background: #f1f4f7;
+      padding: 9px 14px;
+      text-align: left;
+      font-weight: 600;
+      color: #37474f;
+      border-bottom: 2px solid #cfd8dc;
+    }
+    .field-table td {
+      padding: 8px 14px;
+      border-bottom: 1px solid #eceff1;
+      vertical-align: top;
+    }
+    .field-table tr:last-child td { border-bottom: none; }
+    .field-table .required {
+      color: #c62828;
+      font-weight: 700;
+    }
+    .field-table .optional {
+      color: #78909c;
+    }
+    .field-table code {
+      background: #eceff1;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.85em;
+    }
+
+    /* ── Badge chips ── */
+    .badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+    .badge-green  { background: #c8e6c9; color: #1b5e20; }
+    .badge-grey   { background: #eceff1; color: #546e7a; }
+    .badge-blue   { background: #e3f2fd; color: #0d47a1; }
+
+    /* ── Navigation URL bar ── */
+    .url-bar {
+      background: #263238;
+      color: #80cbc4;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-family: "Courier New", monospace;
+      font-size: 0.85rem;
+      margin: 12px 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .url-bar::before {
+      content: "🌐";
+      font-style: normal;
+    }
+
+    /* ── Divider ── */
+    .section-divider {
+      border: none;
+      border-top: 1px solid #e0e0e0;
+      margin: 32px 0;
+    }
+
+    /* ── Print ── */
+    @media print {
+      @page {
+        size: A4;
+        margin: 10mm;
+      }
+      html,
+      body {
+        background: #fff;
+        color: #000;
+        margin: 0;
+        padding: 0;
+        font-size: 13px;
+        line-height: 1.45;
+      }
+      * {
+        box-shadow: none !important;
+        text-shadow: none !important;
+      }
+      .cover {
+        page-break-after: always;
+        min-height: auto;
+        padding: 0;
+        background: #fff !important;
+        color: #000 !important;
+      }
+      .wrapper {
+        max-width: none;
+        margin: 0;
+        padding: 0;
+      }
+      .step {
+        display: block;
+        margin-bottom: 10px;
+      }
+      .step-content p,
+      .step-content h3,
+      .chapter-header h2,
+      .chapter-header p {
+        margin-bottom: 4px;
+      }
+      .cover h1 { font-size: 24px; margin-bottom: 6px; }
+      .cover h2 { font-size: 16px; margin-bottom: 10px; }
+      .chapter-header h2 { font-size: 18px; }
+      .chapter-header p { font-size: 12px; }
+      .step-content h3 { font-size: 14px; }
+      .toc,
+      .chapter,
+      .chapter-header,
+      .callout,
+      .url-bar,
+      .badge,
+      .step-number,
+      .screenshot-placeholder {
+        background: #fff !important;
+        color: #000 !important;
+        border: none !important;
+        border-radius: 0 !important;
+      }
+      .chapter {
+        page-break-inside: auto;
+        margin-bottom: 10px;
+      }
+      .chapter-body,
+      .toc {
+        padding: 0;
+      }
+      .section-divider {
+        margin: 8px 0;
+      }
+      .field-table th,
+      .field-table td {
+        border: none !important;
+        background: #fff !important;
+      }
+      img {
+        max-width: 100% !important;
+        height: auto !important;
+        border: none !important;
+        box-shadow: none !important;
+      }
+      footer {
+        padding-top: 6px !important;
+        font-size: 11px !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     COVER PAGE
+════════════════════════════════════════════ -->
+<div class="cover">
+  <div class="logo-icon">🌿</div>
+  <h1>Gudrās siltumnīcas sistēma tomātu audzēšanai</h1>
+  <h2>Lietotāja Rokasgrāmata</h2>
+  <div class="meta">
+    <p style="margin-top:8px;">Versija 1.0 &nbsp;·&nbsp; 2026. gads</p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     MAIN CONTENT
+════════════════════════════════════════════ -->
+<div class="wrapper">
+
+  <!-- ── Table of Contents ── -->
+  <nav class="toc">
+    <h2>Saturs</h2>
+    <ol>
+      <li><a href="#chapter-1">Lietotāja reģistrācija</a>
+        <ol class="sub">
+          <li>Reģistrācijas veidlapa</li>
+          <li>Pieslēgšanās sistēmai</li>
+        </ol>
+      </li>
+      <li><a href="#chapter-2">Siltumnīcas izveide</a>
+        <ol class="sub">
+          <li>Siltumnīcas pievienošana</li>
+          <li>Moduļu iespējošana</li>
+        </ol>
+      </li>
+      <li><a href="#chapter-3">Siltumnīcas konfigurācija</a>
+        <ol class="sub">
+          <li>Kontrollera iestatīšana</li>
+          <li>Ierīču savienošana (pairing)</li>
+          <li>Sezonas pārvaldība</li>
+        </ol>
+      </li>
+      <li><a href="#chapter-4">Laistīšanas plāna izveide</a>
+        <ol class="sub">
+          <li>Plāna pamatiestatījumi</li>
+          <li>Automātisko ciklu ģenerēšana</li>
+        </ol>
+      </li>
+      <li><a href="#chapter-5">Augu pārvaldība</a>
+        <ol class="sub">
+          <li>Auga pievienošana</li>
+          <li>Augu saraksts un izkārtojums</li>
+        </ol>
+      </li>
+    </ol>
+  </nav>
+
+
+  <!-- ═══════════════════════════════════════════
+       CHAPTER 1 – REGISTRATION
+  ════════════════════════════════════════════ -->
+  <section class="chapter" id="chapter-1">
+    <div class="chapter-header">
+      <div class="chapter-number">1</div>
+      <div>
+        <h2>Lietotāja reģistrācija</h2>
+        <p>Jauna konta izveide un pieslēgšanās sistēmai</p>
+      </div>
+    </div>
+    <div class="chapter-body">
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h3>Atveriet reģistrācijas lapu</h3>
+          <p>Pārlūkprogrammā dodieties uz siltumnīcas sistēmas adresi un noklikšķiniet uz <strong>"Reģistrēties"</strong> vai izmantojiet tiešo saiti:</p>
+          <div class="url-bar">/register/</div>
+          <img
+            src="docs/user-manual/images/01-registration.png"
+            alt="Reģistrācijas lapa"
+            style="width:100%; max-width:860px; border:1px solid #cfd8dc; border-radius:8px; margin:18px 0; display:block;"
+          />
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h3>Aizpildiet reģistrācijas veidlapu</h3>
+          <p>Ievadiet savus datus šādos laukos:</p>
+          <table class="field-table">
+            <thead>
+              <tr>
+                <th>Lauks</th>
+                <th>Apraksts</th>
+                <th>Statuss</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>E-pasts</strong></td>
+                <td>Derīga e-pasta adrese, kas tiks izmantota kā lietotājvārds pieslēgšanās laikā</td>
+                <td><span class="required">Obligāts</span></td>
+              </tr>
+              <tr>
+                <td><strong>Parole</strong></td>
+                <td>Izvēlieties drošu paroli (vismaz 8 rakstzīmes)</td>
+                <td><span class="required">Obligāts</span></td>
+              </tr>
+              <tr>
+                <td><strong>Parole atkārtoti</strong></td>
+                <td>Ievadiet to pašu paroli vēlreiz apstiprināšanai</td>
+                <td><span class="required">Obligāts</span></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="callout callout-warning">
+            <span class="callout-icon">⚠️</span>
+            <p>Ja norādītā e-pasta adrese jau ir reģistrēta, sistēma parādīs kļūdas paziņojumu. Katrs e-pasts var tikt izmantots tikai vienreiz.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h3>Apstipriniet reģistrāciju</h3>
+          <p>Noklikšķiniet uz pogas <strong>"Reģistrēties"</strong>. Ja visi dati ir ievadīti pareizi, sistēma automātiski novirzīs jūs uz pārskatu (<em>dashboard</em>).</p>
+          <div class="callout callout-success">
+            <span class="callout-icon">✅</span>
+            <p>Veiksmīgas reģistrācijas gadījumā jūs automātiski tiekat pieslēgts un novirzīts uz siltumnīcas pārskata lapu.</p>
+          </div>
+        </div>
+      </div>
+
+      <hr class="section-divider" />
+
+      <div class="step">
+        <div class="step-number">4</div>
+        <div class="step-content">
+          <h3>Pieslēgšanās sistēmai (atkārtota apmeklēšana)</h3>
+          <p>Nākamajās reizēs izmantojiet pieslēgšanās lapu:</p>
+          <div class="url-bar">/login/</div>
+          <p>Ievadiet reģistrēto <strong>e-pastu</strong> un <strong>paroli</strong>, pēc tam noklikšķiniet uz <strong>"Pieslēgties"</strong>.</p>
+          <img
+            src="docs/user-manual/images/02-login.png"
+            alt="Pieslēgšanās lapa"
+            style="width:100%; max-width:860px; border:1px solid #cfd8dc; border-radius:8px; margin:18px 0; display:block;"
+          />
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════════
+       CHAPTER 2 – CREATE GREENHOUSE
+  ════════════════════════════════════════════ -->
+  <section class="chapter" id="chapter-2">
+    <div class="chapter-header">
+      <div class="chapter-number">2</div>
+      <div>
+        <h2>Siltumnīcas izveide</h2>
+        <p>Jauna siltumnīcas objekta pievienošana sistēmai</p>
+      </div>
+    </div>
+    <div class="chapter-body">
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h3>Atveriet siltumnīcu pārvaldību</h3>
+          <p>Augšējā navigācijas izvēlnē noklikšķiniet uz <strong>"Iestatījumi"</strong> vai dodieties tieši uz:</p>
+          <div class="url-bar">/setup/</div>
+          <img
+            src="docs/user-manual/images/09-blank-start-page.png"
+            alt="Siltumnīcu pārvaldības lapa"
+            style="width:100%; max-width:860px; border:1px solid #cfd8dc; border-radius:8px; margin:18px 0; display:block;"
+          />
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h3>Atveriet pievienošanas dialogu</h3>
+          <p>Noklikšķiniet uz zaļās pogas <strong>"Pievienot siltumnīcu"</strong> augšējā labajā stūrī. Ekrānā parādīsies modāls logs ar siltumnīcas datu veidlapu.</p>
+          <img
+            src="docs/user-manual/images/03-create-greenhouse.png"
+            alt="Siltumnīcas izveide"
+            style="width:100%; max-width:860px; border:1px solid #cfd8dc; border-radius:8px; margin:18px 0; display:block;"
+          />
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h3>Aizpildiet siltumnīcas datus</h3>
+          <table class="field-table">
+            <thead>
+              <tr><th>Lauks</th><th>Apraksts</th><th>Statuss</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Nosaukums</strong></td>
+                <td>Siltumnīcas nosaukums, piemēram, <code>Tomātu siltumnīca Nr. 1</code></td>
+                <td><span class="required">Obligāts</span></td>
+              </tr>
+              <tr>
+                <td><strong>Atrašanās vieta</strong></td>
+                <td>Fiziskā adrese vai apraksts, piemēram, <code>Rīga, dārza māja</code></td>
+                <td><span class="optional">Neobligāts</span></td>
+              </tr>
+              <tr>
+                <td><strong>Sezona</strong></td>
+                <td>Pašreizējā audzēšanas sezona, piemēram, <code>Vasara 2026</code></td>
+                <td><span class="optional">Neobligāts</span></td>
+              </tr>
+              <tr>
+                <td><strong>Laika zona</strong></td>
+                <td>Siltumnīcas laika zona, piemēram, <code>Europe/Riga</code></td>
+                <td><span class="optional">Neobligāts</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">4</div>
+        <div class="step-content">
+          <h3>Iespējojiet nepieciešamos moduļus</h3>
+          <p>Siltumnīcas veidlapā ieslēdziet tos funkcionalitātes moduļus, kurus plānojat izmantot:</p>
+          <table class="field-table">
+            <thead>
+              <tr><th>Modulis</th><th>Apraksts</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="badge badge-green">Augi</span></td>
+                <td>Iespējo augu reģistrāciju, izsekošanu un pārvaldību siltumnīcā</td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-green">Izkārtojums</span></td>
+                <td>Aktivizē grafisko siltumnīcas izkārtojuma karti augu pozicionēšanai</td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-green">Meteostacija</span></td>
+                <td>Iespējo temperatūras un mitruma sensoru datu attēlošanu (eksperimentāls modulis, drīzumā tiks ieviests)</td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-green">Laistīšana litros</span></td>
+                <td>Ļauj norādīt ūdens daudzumu mililitros papildus laika ilgumam (eksperimentāls modulis, drīzumā tiks ieviests)</td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-green">Gudrie ieteikumi</span></td>
+                <td>Iespējo automātiskos laistīšanas ieteikumus uz datu bāzes pamata (eksperimentāls modulis, drīzumā tiks ieviests)</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="callout callout-info">
+            <span class="callout-icon">ℹ️</span>
+            <p>Moduļus var iespējot vai atspējot arī vēlāk, rediģējot siltumnīcas iestatījumus lapā <code>/setup/</code>.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">5</div>
+        <div class="step-content">
+          <h3>Saglabājiet siltumnīcu</h3>
+          <p>Noklikšķiniet uz pogas <strong>"Saglabāt"</strong>. Jaunā siltumnīca parādīsies siltumnīcu sarakstā un automātiski tiks iestatīta kā <strong>aktīvā siltumnīca</strong>.</p>
+          <img
+            src="docs/user-manual/images/04-saved-greenhouse.png"
+            alt="Saglabāta siltumnīca"
+            style="width:100%; max-width:860px; border:1px solid #cfd8dc; border-radius:8px; margin:18px 0; display:block;"
+          />
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════════
+       CHAPTER 3 – GREENHOUSE CONFIGURATION
+  ════════════════════════════════════════════ -->
+  <section class="chapter" id="chapter-3">
+    <div class="chapter-header">
+      <div class="chapter-number">3</div>
+      <div>
+        <h2>Siltumnīcas konfigurācija</h2>
+        <p>Kontrollera savienojuma iestatīšana, ierīču pievienošana un sezonas pārvaldība</p>
+      </div>
+    </div>
+    <div class="chapter-body">
+
+      <h3 style="margin-bottom:18px; color:#1b5e20;">3.1 Kontrollera iestatīšana</h3>
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h3>Atveriet siltumnīcas iestatījumus</h3>
+          <p>Lapā <code>/setup/</code> atrodiet vēlamās siltumnīcas karti un noklikšķiniet uz <strong>"Rediģēt"</strong> vai <strong>"Konfigurēt kontrolleri"</strong>.</p>
+          <img
+            src="docs/user-manual/images/05-controller-setup.png"
+            alt="Siltumnīcas kontrollera iestatīšana"
+            style="width:100%; max-width:860px; border:1px solid #cfd8dc; border-radius:8px; margin:18px 0; display:block;"
+          />
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h3>Ievadiet kontrollera savienojuma datus</h3>
+          <table class="field-table">
+            <thead>
+              <tr><th>Lauks</th><th>Apraksts</th><th>Piemērs</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Kontrollera IP</strong></td>
+                <td>Raspberry Pi vai vārtejas IP adrese lokālajā tīklā</td>
+                <td><code>192.168.8.100</code></td>
+              </tr>
+              <tr>
+                <td><strong>Lietotājs</strong></td>
+                <td>MQTT brokera vai kontrollera lietotājvārds</td>
+                <td><code>admin</code></td>
+              </tr>
+              <tr>
+                <td><strong>Parole</strong></td>
+                <td>Kontrollera savienojuma parole</td>
+                <td><code>••••••••</code></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="callout callout-warning">
+            <span class="callout-icon">⚠️</span>
+            <p>Kontrollerim jābūt pieejamam tajā pašā lokālajā tīklā. Pārbaudiet MQTT statusa indikatoru siltumnīcas kartē — tas parāda savienojuma stāvokli reāllaikā.</p>
+          </div>
+        </div>
+      </div>
+
+      <hr class="section-divider" />
+
+      <h3 style="margin-bottom:18px; color:#1b5e20;">3.2 Ierīču savienošana (Pairing)</h3>
+
+      <div class="callout callout-warning">
+        <span class="callout-icon">⚠️</span>
+        <p><strong>Svarīgi:</strong> Ierīce jāaktivizē pāru savienošanas režīmā pirms savienošanas ar sistēmu. Skatiet ierīces iepakojumu vai manuāli instrukcijām par to, kā ieviest pāru savienošanas režīmu.</p>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h3>Pievienojiet Zigbee ierīci</h3>
+          <p>Siltumnīcas kartē noklikšķiniet uz <strong>"Pievienot +"</strong> sadaļā "Pārī savienotās ierīces". Parādīsies ierīces pievienošanas panelis.</p>
+          <img
+            src="docs/user-manual/images/06-pair-sensor.png"
+            alt="Ierīces pievienošanas panelis"
+            style="width:100%; max-width:860px; border:1px solid #cfd8dc; border-radius:8px; margin:18px 0; display:block;"
+          />
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">4</div>
+        <div class="step-content">
+          <h3>Ievadiet ierīces datus</h3>
+          <table class="field-table">
+            <thead>
+              <tr><th>Lauks</th><th>Apraksts</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Zigbee ID</strong></td>
+                <td>Ierīces unikālais heksadecimālais identifikators, piemēram, <code>0x540f57fffe890af8</code></td>
+              </tr>
+              <tr>
+                <td><strong>Nosaukums</strong></td>
+                <td>Saprotams nosaukums, piemēram, <code>Laistīšanas kontrolieris</code></td>
+              </tr>
+              <tr>
+                <td><strong>Ierīces tips</strong></td>
+                <td>Izvēlieties no: <span class="badge badge-blue">Laistīšanas kontrolieris</span>, <span class="badge badge-blue">Temperatūras sensors</span>, <span class="badge badge-blue">Mitruma sensors</span></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="callout callout-info">
+            <span class="callout-icon">ℹ️</span>
+            <p>Zigbee ierīces ID var atrast ierīces iepakojumā vai Zigbee2MQTT tīmekļa saskarnē. Tas vienmēr sākas ar <code>0x</code>.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">5</div>
+        <div class="step-content">
+          <h3>Saglabājiet ierīci</h3>
+          <p>Noklikšķiniet uz <strong>"Saglabāt ierīci"</strong>. Ierīce parādīsies siltumnīcas kartē ierīču sarakstā ar atbilstošu ikonu un Zigbee ID.</p>
+          <img
+            src="docs/user-manual/images/07-sensor-added.png"
+            alt="Siltumnīcas karte ar pievienotu ierīci"
+            style="width:100%; max-width:860px; border:1px solid #cfd8dc; border-radius:8px; margin:18px 0; display:block;"
+          />
+        </div>
+      </div>
+
+      <hr class="section-divider" />
+
+      <h3 style="margin-bottom:18px; color:#1b5e20;">3.3 Sezonas pārvaldība</h3>
+
+      <div class="step">
+        <div class="step-number">6</div>
+        <div class="step-content">
+          <h3>Pievienojiet audzēšanas sezonu</h3>
+          <p>Siltumnīcas kartē atrodiet sadaļu <strong>"Sezonas"</strong> un noklikšķiniet uz <strong>"Pievienot sezonu"</strong>. Ievadiet sezonas nosaukumu (piemēram, <code>Vasara 2026</code>) un datumu diapazonu.</p>
+          <img
+            src="docs/user-manual/images/08-season-add.png"
+            alt="Sezonas pievienošana"
+            style="width:100%; max-width:860px; border:1px solid #cfd8dc; border-radius:8px; margin:18px 0; display:block;"
+          />
+          <div class="callout callout-success">
+            <span class="callout-icon">✅</span>
+            <p>Sezona ļauj grupēt augus un laistīšanas plānus pa audzēšanas periodiem, nodrošinot labāku pārskatāmību gadu gaitā.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════════
+       CHAPTER 4 – WATERING PLAN
+  ════════════════════════════════════════════ -->
+  <section class="chapter" id="chapter-4">
+    <div class="chapter-header">
+      <div class="chapter-number">4</div>
+      <div>
+        <h2>Laistīšanas plāna izveide</h2>
+        <p>Automātiskā laistīšanas grafika definēšana ar cikliem</p>
+      </div>
+    </div>
+    <div class="chapter-body">
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h3>Atveriet plāna izveides lapu</h3>
+          <p>No pārskata lapas noklikšķiniet uz pogas <strong>"Jauns plāns"</strong>, vai navigācijas izvēlnē izvēlieties <strong>Laistīšana → Jauns plāns</strong>. Varat arī pārvietoties tieši uz:</p>
+          <div class="url-bar">/watering/plans/create/</div>
+          <img
+            src="docs/user-manual/images/10-create-watering-plan.png"
+            alt="Laistīšanas plāna izveide"
+            style="width:100%; max-width:860px; border:1px solid #cfd8dc; border-radius:8px; margin:18px 0; display:block;"
+          />
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h3>Aizpildiet plāna pamatiestatījumus</h3>
+          <table class="field-table">
+            <thead>
+              <tr><th>Lauks</th><th>Apraksts</th><th>Statuss</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Nosaukums</strong></td>
+                <td>Plāna aprakstošs nosaukums, piemēram, <code>Rīta laistīšana – jūnijs</code></td>
+                <td><span class="required">Obligāts</span></td>
+              </tr>
+              <tr>
+                <td><strong>Apraksts</strong></td>
+                <td>Brīvs teksta lauks papildu piezīmēm</td>
+                <td><span class="optional">Neobligāts</span></td>
+              </tr>
+              <tr>
+                <td><strong>Siltumnīca</strong></td>
+                <td>Izvēlieties siltumnīcu, kurai piesaistīt šo plānu</td>
+                <td><span class="optional">Neobligāts</span></td>
+              </tr>
+              <tr>
+                <td><strong>Sākuma datums</strong></td>
+                <td>No kura datuma plāns ir spēkā</td>
+                <td><span class="optional">Neobligāts</span></td>
+              </tr>
+              <tr>
+                <td><strong>Beigu datums</strong></td>
+                <td>Līdz kuram datumam plāns ir spēkā</td>
+                <td><span class="optional">Neobligāts</span></td>
+              </tr>
+              <tr>
+                <td><strong>Aktīvs plāns</strong></td>
+                <td>Atzīmējiet, ja plānam jādarbojas automātiski</td>
+                <td><span class="optional">Noklusējums: ✓</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h3>Iespējojiet automātisko ciklu ģenerēšanu</h3>
+          <p>Atzīmējiet izvēles rūtiņu <strong>"Izveidot ciklus automātiski šim plānam"</strong>. Tiks parādītas papildu opcijas laistīšanas ciklu iestatīšanai.</p>
+          <img
+            src="docs/user-manual/images/11-create-watering-plan-cycles.png"
+            alt="Automātisko laistīšanas ciklu iestatījumi"
+            style="width:100%; max-width:860px; border:1px solid #cfd8dc; border-radius:8px; margin:18px 0; display:block;"
+          />
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">4</div>
+        <div class="step-content">
+          <h3>Konfigurējiet cikla parametrus</h3>
+          <table class="field-table">
+            <thead>
+              <tr><th>Lauks</th><th>Apraksts</th><th>Iespējas</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Atkārtošanās tips</strong></td>
+                <td>Cik bieži laistīšana tiks veikta</td>
+                <td>
+                  <span class="badge badge-blue">Katru dienu</span><br>
+                  <span class="badge badge-grey">Ik pēc N dienām</span><br>
+                  <span class="badge badge-grey">Katru nedēļu konkrētā dienā</span>
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Intervāls (dienās)</strong></td>
+                <td>Redzams tikai "Ik pēc N dienām" tipam; vērtība 1–7</td>
+                <td>1 – 7</td>
+              </tr>
+              <tr>
+                <td><strong>Nedēļas diena</strong></td>
+                <td>Redzams tikai "Katru nedēļu" tipam</td>
+                <td>Pirmdiena – Svētdiena</td>
+              </tr>
+              <tr>
+                <td><strong>Ierīce</strong></td>
+                <td>Zigbee laistīšanas kontrolieris, kas izpildīs ciklu</td>
+                <td>Pieejamās ierīces no siltumnīcas</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">5</div>
+        <div class="step-content">
+          <h3>Definējiet laistīšanas laikus</h3>
+          <p>Sadaļā <strong>"Laistīšanas reizes"</strong> norādiet vienu vai vairākus laistīšanas laikrakstus dienā:</p>
+          <table class="field-table">
+            <thead>
+              <tr><th>Lauks</th><th>Apraksts</th><th>Piemērs</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Laiks</strong></td>
+                <td>Laistīšanas sākuma laiks (HH:MM formātā)</td>
+                <td><code>06:00</code></td>
+              </tr>
+              <tr>
+                <td><strong>Ilgums (sek.)</strong></td>
+                <td>Cik ilgi darbosies laistīšana sekundēs</td>
+                <td><code>60</code> (1 minūte)</td>
+              </tr>
+            </tbody>
+          </table>
+          <p>Lai pievienotu papildu laistīšanas laiku, noklikšķiniet uz <strong>"+ Pievienot laiku"</strong>.</p>
+          <img
+            src="docs/user-manual/images/12-create-watering-plan-cycles-add.png"
+            alt="Vairāki laistīšanas laiki vienā plānā"
+            style="width:100%; max-width:860px; border:1px solid #cfd8dc; border-radius:8px; margin:18px 0; display:block;"
+          />
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">6</div>
+        <div class="step-content">
+          <h3>Saglabājiet plānu</h3>
+          <p>Noklikšķiniet uz <strong>"Saglabāt plānu"</strong>. Sistēma automātiski ģenerēs laistīšanas ciklus visam norādītajam datumu diapazonam un novirzīs uz plāna detaļu lapu.</p>
+          <div class="callout callout-success">
+            <span class="callout-icon">✅</span>
+            <p>Plāna detaļu lapā varat pārskatīt visus ģenerētos ciklus, mainīt to laikus, dzēst nevajadzīgos vai manuāli pievienot jaunus.</p>
+          </div>
+          <img
+            src="docs/user-manual/images/13-watering_plan_created.png"
+            alt="Izveidots laistīšanas plāns"
+            style="width:100%; max-width:860px; border:1px solid #cfd8dc; border-radius:8px; margin:18px 0; display:block;"
+          />
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════════════════
+       CHAPTER 5 – PLANT MANAGEMENT
+  ════════════════════════════════════════════ -->
+  <section class="chapter" id="chapter-5">
+    <div class="chapter-header">
+      <div class="chapter-number">5</div>
+      <div>
+        <h2>Augu pārvaldība</h2>
+        <p>Augu pievienošana siltumnīcai, izsekošana un izkārtojuma karte</p>
+      </div>
+    </div>
+    <div class="chapter-body">
+
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h3>Atveriet augu pievienošanas lapu</h3>
+          <p>Navigācijas izvēlnē izvēlieties <strong>Augi → Pievienot augu</strong>, vai izmantojiet tiešo saiti:</p>
+          <div class="url-bar">/plants/create/</div>
+          <img
+            src="docs/user-manual/images/15-create-plant.png"
+            alt="Augu sadaļa pirms auga pievienošanas"
+            style="width:100%; max-width:860px; border:1px solid #cfd8dc; border-radius:8px; margin:18px 0; display:block;"
+          />
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h3>Izvēlieties siltumnīcu un sezonu</h3>
+          <table class="field-table">
+            <thead>
+              <tr><th>Lauks</th><th>Apraksts</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Siltumnīca</strong></td>
+                <td>Izvēlieties siltumnīcu, kurā augs tiks pievienots. Atstājot tukšu — tiek izmantota aktīvā siltumnīca.</td>
+              </tr>
+              <tr>
+                <td><strong>Sezona</strong></td>
+                <td>Izvēlieties audzēšanas sezonu. Atstājot tukšu — tiek izmantota siltumnīcas aktīvā sezona.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h3>Ievadiet auga pamata informāciju</h3>
+          <table class="field-table">
+            <thead>
+              <tr><th>Lauks</th><th>Apraksts</th><th>Statuss</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Nosaukums</strong></td>
+                <td>Auga nosaukums, piemēram, <code>Tomāts</code></td>
+                <td><span class="required">Obligāts</span></td>
+              </tr>
+              <tr>
+                <td><strong>Šķirne</strong></td>
+                <td>Konkrētā šķirne, piemēram, <code>Cherry</code> vai <code>Beefsteak</code></td>
+                <td><span class="optional">Neobligāts</span></td>
+              </tr>
+              <tr>
+                <td><strong>Stādīšanas datums</strong></td>
+                <td>Datums, kad augs tika iestādīts</td>
+                <td><span class="required">Obligāts</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">4</div>
+        <div class="step-content">
+          <h3>Norādiet auga pozīciju siltumnīcā</h3>
+          <p>Ievadiet rindas un kolonnas numuru, kas atbilst auga fiziskajai vietai siltumnīcas telpā. Šī informācija tiks izmantota grafiskajā izkārtojuma kartē.</p>
+          <table class="field-table">
+            <thead>
+              <tr><th>Lauks</th><th>Apraksts</th><th>Statuss</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Rinda</strong></td>
+                <td>Rindu numurs siltumnīcas režģī (sākas ar 1)</td>
+                <td><span class="required">Obligāts</span></td>
+              </tr>
+              <tr>
+                <td><strong>Kolonna</strong></td>
+                <td>Kolonnas numurs siltumnīcas režģī (sākas ar 1)</td>
+                <td><span class="required">Obligāts</span></td>
+              </tr>
+              <tr>
+                <td><strong>Atrašanās apraksts</strong></td>
+                <td>Brīvs apraksts atrašanās vietai, piemēram, <code>Austrumu sienas puse, 3. rinda</code></td>
+                <td><span class="optional">Neobligāts</span></td>
+              </tr>
+            </tbody>
+          </table>
+          <img
+            src="docs/user-manual/images/14_add_plant.png"
+            alt="Aizpildīta auga pievienošanas veidlapa"
+            style="width:100%; max-width:860px; border:1px solid #cfd8dc; border-radius:8px; margin:18px 0; display:block;"
+          />
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">5</div>
+        <div class="step-content">
+          <h3>Norādiet laistīšanas un ražas datus</h3>
+          <table class="field-table">
+            <thead>
+              <tr><th>Lauks</th><th>Apraksts</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Laistīšanas biežums</strong></td>
+                <td>Cik reizes dienā augs jālaista (noklusējums: 1)</td>
+              </tr>
+              <tr>
+                <td><strong>Laistīšanas ilgums (sek.)</strong></td>
+                <td>Cik ilgi laistīt vienu reizi sekundēs (noklusējums: 300)</td>
+              </tr>
+              <tr>
+                <td><strong>Ūdens daudzums (ml)</strong></td>
+                <td>Ūdens daudzums mililitros vienā laistīšanas reizē (neobligāts)</td>
+              </tr>
+              <tr>
+                <td><strong>Ražas datuma prognoze</strong></td>
+                <td>Paredzamais ražas novākšanas datums</td>
+              </tr>
+              <tr>
+                <td><strong>Ražas daudzuma prognoze (kg)</strong></td>
+                <td>Paredzamais ražas apjoms kilogramos</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="callout callout-info">
+            <span class="callout-icon">ℹ️</span>
+            <p><strong>Eksperimentālās un neobligātās funkcijas:</strong> lauki <strong>"Laistīšanas biežums"</strong>, <strong>"Laistīšanas ilgums (sek.)"</strong>, <strong>"Ūdens daudzums (ml)"</strong>, <strong>"Ražas daudzuma prognoze (kg)"</strong> un <strong>"Atrašanās apraksts"</strong> ir eksperimentāli un neobligāti. Ja šie lauki netiek aizpildīti, augu var saglabāt arī bez tiem.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">6</div>
+        <div class="step-content">
+          <h3>Saglabājiet augu</h3>
+          <p>Noklikšķiniet uz <strong>"Saglabāt"</strong>. Augs tiks pievienots siltumnīcai un būs redzams augu sarakstā un izkārtojuma kartē.</p>
+          <div class="callout callout-success">
+            <span class="callout-icon">✅</span>
+            <p>Pievienojot vairākus augus, tie visi tiks parādīti grafiskajā izkārtojuma kartē atbilstoši norādītajiem rindas un kolonnas numuriem.</p>
+          </div>
+        </div>
+      </div>
+
+      <hr class="section-divider" />
+
+      <h3 style="margin-bottom:18px; color:#1b5e20;">5.2 Augu saraksts un izkārtojuma karte</h3>
+
+      <div class="step">
+        <div class="step-number">7</div>
+        <div class="step-content">
+          <h3>Skatiet augu sarakstu</h3>
+          <p>Dodieties uz augu sarakstu:</p>
+          <div class="url-bar">/plants/list/</div>
+          <p>Sarakstā redzami visi aktīvie augi ar nosaukumu, šķirni, stādīšanas datumu, atrašanās vietu un laistīšanas iestatījumiem. Katru augu var atvērt, rediģēt vai deaktivizēt.</p>
+          <img
+            src="docs/user-manual/images/15-list-plants.png"
+            alt="Augu saraksta lapa"
+            style="width:100%; max-width:860px; border:1px solid #cfd8dc; border-radius:8px; margin:18px 0; display:block;"
+          />
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">8</div>
+        <div class="step-content">
+          <h3>Skatiet siltumnīcas izkārtojuma karti</h3>
+          <p>Dodieties uz izkārtojuma lapu:</p>
+          <div class="url-bar">/layout/</div>
+          <p>Interaktīvā režģa karte parāda visus pievienotos augus to faktiskajās pozīcijās. Kartē var:</p>
+          <ul style="margin: 10px 0 10px 20px; color:#3d4f60; line-height:2;">
+            <li>Klikšķināt uz auga šūnas, lai skatītu detaļas</li>
+            <li>Mainīt režģa izmēru (rindas un kolonnas)</li>
+            <li>Pievienot jaunus augus tieši no kartes (<strong>+ Pievienot augu</strong>)</li>
+            <li>Atzīmēt ejas starp augiem (<strong>Pievienot ceļu</strong>)</li>
+          </ul>
+          <img
+            src="docs/user-manual/images/16-greenhouse-layout.png"
+            alt="Siltumnīcas izkārtojuma karte"
+            style="width:100%; max-width:860px; border:1px solid #cfd8dc; border-radius:8px; margin:18px 0; display:block;"
+          />
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── Footer ── -->
+  <footer style="text-align:center; color:#90a4ae; font-size:0.82rem; padding-top:16px;">
+    Gudrā Siltumnīca &nbsp;·&nbsp; Lietotāja Rokasgrāmata v1.0 &nbsp;·&nbsp; Jānis Sīpols, RTU, 2026
+  </footer>
+
+</div><!-- /wrapper -->
+</body>
+</html>

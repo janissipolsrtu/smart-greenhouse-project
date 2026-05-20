@@ -394,5 +394,49 @@
     setTimeout(function() {
         location.reload();
     }, 30000);
+
+    // For brand-new users (no configured greenhouse), hide data-heavy modules.
+    document.addEventListener('DOMContentLoaded', function () {
+        const hasNoGreenhouseNotice = !!document.querySelector('a[href$="/setup/"] .fa-exclamation-triangle');
+        if (!hasNoGreenhouseNotice) {
+            return;
+        }
+
+        // Hide dashboard sections: watering plans, greenhouse layout, and sensor data.
+        document.querySelectorAll('.dashboard-layout-grid').forEach(function (el) {
+            el.style.display = 'none';
+        });
+        document.querySelectorAll('.fa-calendar-alt, .fa-broadcast-tower').forEach(function (icon) {
+            const card = icon.closest('.card');
+            if (card) {
+                card.style.display = 'none';
+            }
+        });
+
+        // Hide quick-action buttons related to watering/sensor data.
+        const quickActionSelectors = [
+            'a[href*="/watering/"]',
+            'a[href*="/sensor-data/"]',
+            'a[href*="/layout/"]'
+        ];
+        quickActionSelectors.forEach(function (selector) {
+            document.querySelectorAll('.card .card-body ' + selector).forEach(function (link) {
+                link.style.display = 'none';
+            });
+        });
+
+        // Hide matching navbar items until user finishes setup.
+        document.querySelectorAll('.navbar .nav-link, .navbar .dropdown-item').forEach(function (link) {
+            const href = (link.getAttribute('href') || '').toLowerCase();
+            if (href.includes('/watering/') || href.includes('/sensor-data/') || href.includes('/layout/')) {
+                const navItem = link.closest('li');
+                if (navItem) {
+                    navItem.style.display = 'none';
+                } else {
+                    link.style.display = 'none';
+                }
+            }
+        });
+    });
 </script>
 {% endblock %}

@@ -32,7 +32,7 @@
                             <i class="fas fa-expand-arrows-alt"></i> Mainīt izmēru
                         </button>
                         <button type="button" class="btn btn-success btn-sm" id="add-plant-mode-btn">
-                            <i class="fas fa-plus"></i> Pievienot augs
+                            <i class="fas fa-plus"></i> Pievienot augu
                         </button>
                         <button type="button" class="btn btn-warning btn-sm" id="add-path-mode-btn">
                             <i class="fas fa-road"></i> Pievienot ceļu
@@ -159,22 +159,6 @@
                             <input type="date" class="form-control" id="plant-date" name="planting_date" required>
                         </div>
                         
-                        <div class="row">
-                            <div class="col-md-6">
-                                <label for="watering-frequency" class="form-label">Laistīšanas biežums (stundas)</label>
-                                <input type="number" class="form-control" id="watering-frequency" name="watering_frequency" value="24" min="1">
-                            </div>
-                            <div class="col-md-6">
-                                <label for="watering-duration" class="form-label">Laistīšanas ilgums (sek.)</label>
-                                <input type="number" class="form-control" id="watering-duration" name="watering_duration" value="30" min="1">
-                            </div>
-                        </div>
-                        
-                        <div class="mb-3 mt-3">
-                            <label for="water-amount" class="form-label">Ūdens daudzums (ml)</label>
-                            <input type="number" class="form-control" id="water-amount" name="water_amount_ml" value="500" min="50" step="50">
-                        </div>
-                        
                         <div class="mb-3">
                             <label for="harvest-date" class="form-label">Paredzētais ražas datums</label>
                             <input type="date" class="form-control" id="harvest-date" name="harvest_date_estimate">
@@ -225,18 +209,28 @@
     border-radius: 8px;
     background: #f8f9fa;
     padding: 10px;
+    box-sizing: border-box;
+    width: fit-content;
+    max-width: 100%;
 }
 
 .greenhouse-grid {
+    --grid-header-size: 40px;
+    --grid-cell-size: 60px;
+    --grid-gap-size: 3px;
     display: grid;
-    grid-template-columns: 40px repeat({{ max_columns }}, 60px);
-    gap: 3px;
-    min-width: fit-content;
+    grid-template-columns: var(--grid-header-size) repeat({{ max_columns }}, var(--grid-cell-size));
+    gap: var(--grid-gap-size);
+    width: calc(
+        var(--grid-header-size) +
+        ({{ max_columns }} * var(--grid-cell-size)) +
+        ({{ max_columns }} * var(--grid-gap-size))
+    );
 }
 
 .grid-cell {
-    width: 60px;
-    height: 60px;
+    width: var(--grid-cell-size);
+    height: var(--grid-cell-size);
     border: 2px solid #ddd;
     border-radius: 6px;
     display: flex;
@@ -365,12 +359,11 @@
 
 @media (max-width: 768px) {
     .greenhouse-grid {
-        grid-template-columns: 30px repeat({{ max_columns }}, 45px);
+        --grid-header-size: 30px;
+        --grid-cell-size: 45px;
     }
     
     .grid-cell {
-        width: 45px;
-        height: 45px;
         font-size: 10px;
     }
     
@@ -395,6 +388,17 @@ document.addEventListener('DOMContentLoaded', function() {
     const infoPanel = document.getElementById('info-panel');
     const addPlantForm = document.getElementById('add-plant-form');
     const cancelAddBtn = document.getElementById('cancel-add-plant');
+
+    infoPanel.addEventListener('click', function(event) {
+        const removePathButton = event.target.closest('[data-action="remove-path"]');
+        if (!removePathButton) {
+            return;
+        }
+
+        const row = removePathButton.dataset.row;
+        const col = removePathButton.dataset.col;
+        removeItem('path', row, col);
+    });
     
     // Toggle grid controls
     gridControlsBtn.addEventListener('click', function() {
@@ -483,7 +487,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Reset all button states
         addPlantModeBtn.className = 'btn btn-success btn-sm';
-        addPlantModeBtn.innerHTML = '<i class="fas fa-plus"></i> Pievienot augs';
+        addPlantModeBtn.innerHTML = '<i class="fas fa-plus"></i> Pievienot augu';
         
         addPathModeBtn.className = 'btn btn-warning btn-sm';
         addPathModeBtn.innerHTML = '<i class="fas fa-road"></i> Pievienot ceļu';
@@ -668,7 +672,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <h6>Ceļa informācija</h6>
             <div class="small">${title}</div>
             <div class="mt-2">
-                <button class="btn btn-danger btn-sm" onclick="removeItem('path', ${row}, ${col})">
+                <button class="btn btn-danger btn-sm" data-action="remove-path" data-row="${row}" data-col="${col}">
                     <i class="fas fa-trash"></i> Noņemt ceļu
                 </button>
             </div>

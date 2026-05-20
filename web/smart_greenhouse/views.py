@@ -1817,10 +1817,15 @@ def plants_api(request):
             data = json.loads(request.body)
             
             # Validate required fields
-            required_fields = ['name', 'location_row', 'location_column', 'planting_date', 'watering_frequency', 'watering_duration']
+            required_fields = ['name', 'location_row', 'location_column', 'planting_date']
             for field in required_fields:
                 if field not in data or not data[field]:
                     return JsonResponse({'success': False, 'error': f'Nepieciešams lauks: {field}'}, status=400)
+
+            watering_frequency = int(data.get('watering_frequency') or 1)
+            watering_duration = int(data.get('watering_duration') or 300)
+            water_amount_raw = data.get('water_amount_ml')
+            water_amount_ml = int(water_amount_raw) if water_amount_raw not in (None, '') else None
             
             # Check if location is already occupied
             existing_plant = Plant.objects.filter(
@@ -1856,9 +1861,9 @@ def plants_api(request):
                 planting_date=planting_date,
                 greenhouse_id=greenhouse_id,
                 season=season_obj,
-                watering_frequency=int(data['watering_frequency']),
-                watering_duration=int(data['watering_duration']),
-                water_amount_ml=int(data.get('water_amount_ml', 500)),
+                watering_frequency=watering_frequency,
+                watering_duration=watering_duration,
+                water_amount_ml=water_amount_ml,
                 harvest_date_estimate=harvest_date,
                 harvest_quantity_estimate=float(data.get('harvest_quantity_estimate', 0)) if data.get('harvest_quantity_estimate') else None,
                 location_row=int(data['location_row']),
