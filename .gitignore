@@ -80,6 +80,7 @@ Thumbs.db
 *.bak
 *.swp
 *.cache
+~$*.docx
 
 # Node modules (if any)
 node_modules/
@@ -99,3 +100,19 @@ secrets/
 
 # Mosquitto data
 mosquitto/data/
+
+# Runtime state
+celerybeat-schedule
+src/celerybeat-schedule
+
+# Database backups
+backups/
+backup/
+db_backups/
+database_backups/
+*.dump
+*.dmp
+*.bak.sql
+*.sql.gz
+*.sql.zip
+*.sqlite3.bak
